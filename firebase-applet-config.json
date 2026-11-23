@@ -1,0 +1,11 @@
+{
+  "projectId": "ipl-game-66bdb",
+  "appId": "REPLACE_WITH_IPL_GAME_66BDB_APP_ID",
+  "apiKey": "REPLACE_WITH_IPL_GAME_66BDB_API_KEY",
+  "authDomain": "ipl-game-66bdb.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "ipl-game-66bdb.firebasestorage.app",
+  "messagingSenderId": "REPLACE_WITH_IPL_GAME_66BDB_MESSAGING_SENDER_ID",
+  "measurementId": "",
+  "recaptchaSiteKey": ""
+}

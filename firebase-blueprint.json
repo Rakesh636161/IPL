@@ -1,0 +1,1041 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Private authenticated user account record containing PII and immutable Unique Player ID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254,
+          "description": "User email address (private PII)"
+        },
+        "uniquePlayerId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 20,
+          "pattern": "^CV[0-9]{6,}$",
+          "description": "Immutable sequential CricketVerse Player ID (e.g., CV100001)"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["USER", "ADMIN"],
+          "description": "Application access role"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "uniquePlayerId", "role", "createdAt", "updatedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "CricketVerse franchise owner public profile.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uniquePlayerId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 20,
+          "pattern": "^CV[0-9]{6,}$"
+        },
+        "username": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "country": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "preferredRole": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "onlineStatus": {
+          "type": "string",
+          "enum": ["ONLINE", "IN_AUCTION", "OFFLINE"]
+        },
+        "publicVisible": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "uniquePlayerId", "username", "onlineStatus", "publicVisible", "createdAt", "updatedAt"]
+    },
+    "PlayerDirectoryEntry": {
+      "title": "PlayerDirectoryEntry",
+      "description": "Exact-key directory entry allowing Unique Player ID lookup without collection scraping.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uniquePlayerId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 20,
+          "pattern": "^CV[0-9]{6,}$"
+        },
+        "username": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "onlineStatus": {
+          "type": "string",
+          "enum": ["ONLINE", "IN_AUCTION", "OFFLINE"]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "uniquePlayerId", "username", "onlineStatus", "updatedAt"]
+    },
+    "UserStatistics": {
+      "title": "UserStatistics",
+      "description": "Aggregated match, tournament, and auction participation statistics for a user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "totalMatches": { "type": "integer" },
+        "totalWins": { "type": "integer" },
+        "totalTournaments": { "type": "integer" },
+        "auctionsParticipated": { "type": "integer" },
+        "playersAcquired": { "type": "integer" },
+        "totalSpent": { "type": "integer" },
+        "auctionHistory": {
+          "type": "array",
+          "description": "Bounded recent auction participation records (max 25 entries)"
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "totalMatches", "totalWins", "totalTournaments", "auctionsParticipated", "updatedAt"]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "Directed friend request between two CricketVerse players.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderPlayerId": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^CV[0-9]{6,}$" },
+        "senderUsername": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "senderPhotoUrl": { "type": "string", "maxLength": 500 },
+        "receiverId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "receiverPlayerId": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^CV[0-9]{6,}$" },
+        "receiverUsername": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "receiverPhotoUrl": { "type": "string", "maxLength": 500 },
+        "participants": { "type": "array", "description": "Bounded 2-UID tuple for secure participant list queries" },
+        "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "REJECTED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "senderId",
+        "senderPlayerId",
+        "senderUsername",
+        "receiverId",
+        "receiverPlayerId",
+        "receiverUsername",
+        "participants",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Active mutual friendship record created when a friend request is accepted.",
+      "type": "object",
+      "properties": {
+        "user1Id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user2Id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "participants": { "type": "array", "description": "Bounded 2-UID tuple for mutual friends" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user1Id", "user2Id", "participants", "createdBy", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification document for friend requests, league invites, and auction alerts.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": {
+          "type": "string",
+          "enum": ["FRIEND_REQUEST", "FRIEND_ACCEPTED", "LEAGUE_INVITE", "LEAGUE_JOINED", "LEAGUE_REQUEST", "LEAGUE_UPDATE", "AUCTION_ALERT", "SYSTEM"]
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 320 },
+        "read": { "type": "boolean" },
+        "metadata": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "senderId", "type", "title", "message", "read", "createdAt"]
+    },
+    "League": {
+      "title": "League",
+      "description": "Multiplayer cricket auction league core metadata, bounded member list (max 12), and controlled lifecycle status.",
+      "type": "object",
+      "properties": {
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 3, "maxLength": 60 },
+        "description": { "type": "string", "maxLength": 300 },
+        "logoUrl": { "type": "string", "maxLength": 500 },
+        "visibility": { "type": "string", "enum": ["PRIVATE", "PUBLIC"] },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerName": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "ownerPlayerId": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^CV[0-9]{6,}$" },
+        "status": {
+          "type": "string",
+          "enum": ["CREATED", "OPEN", "FULL", "READY", "AUCTION_IN_PROGRESS", "COMPLETED", "CANCELLED"]
+        },
+        "maxParticipants": { "type": "integer" },
+        "numberOfTeams": { "type": "integer" },
+        "participantCount": { "type": "integer" },
+        "memberIds": { "type": "array", "description": "Bounded array of member Firebase UIDs (max 12)" },
+        "startingPurse": { "type": "integer" },
+        "squadSize": { "type": "integer" },
+        "minPlayers": { "type": "integer" },
+        "maxPlayers": { "type": "integer" },
+        "bidIncrement": { "type": "integer" },
+        "timerDuration": { "type": "integer" },
+        "auctionMode": { "type": "string", "enum": ["MEGA", "MINI", "FAST_TRACK"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "leagueId",
+        "name",
+        "visibility",
+        "ownerId",
+        "ownerName",
+        "ownerPlayerId",
+        "status",
+        "maxParticipants",
+        "numberOfTeams",
+        "participantCount",
+        "memberIds",
+        "startingPurse",
+        "squadSize",
+        "minPlayers",
+        "maxPlayers",
+        "bidIncrement",
+        "timerDuration",
+        "auctionMode",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LeagueSettings": {
+      "title": "LeagueSettings",
+      "description": "Member-readable league configuration, squad rules, and invite code credentials.",
+      "type": "object",
+      "properties": {
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "inviteCode": { "type": "string", "minLength": 6, "maxLength": 20, "pattern": "^CV-[A-Z0-9]{4,16}$" },
+        "inviteCodeActive": { "type": "boolean" },
+        "inviteCodeExpiresAt": { "type": "string", "maxLength": 40 },
+        "startingPurse": { "type": "integer" },
+        "squadSize": { "type": "integer" },
+        "minPlayers": { "type": "integer" },
+        "maxPlayers": { "type": "integer" },
+        "bidIncrement": { "type": "integer" },
+        "timerDuration": { "type": "integer" },
+        "auctionMode": { "type": "string", "enum": ["MEGA", "MINI", "FAST_TRACK"] },
+        "allowTeamCustomization": { "type": "boolean" },
+        "minBatsmen": { "type": "integer" },
+        "minBowlers": { "type": "integer" },
+        "minAllRounders": { "type": "integer" },
+        "minWicketkeepers": { "type": "integer" },
+        "maxOverseas": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "leagueId",
+        "ownerId",
+        "inviteCode",
+        "inviteCodeActive",
+        "startingPurse",
+        "squadSize",
+        "minPlayers",
+        "maxPlayers",
+        "bidIncrement",
+        "timerDuration",
+        "auctionMode",
+        "allowTeamCustomization",
+        "minBatsmen",
+        "minBowlers",
+        "minAllRounders",
+        "minWicketkeepers",
+        "maxOverseas",
+        "updatedAt"
+      ]
+    },
+    "LeagueInviteCode": {
+      "title": "LeagueInviteCode",
+      "description": "Exact-key invitation code lookup document preventing collection scraping of private leagues.",
+      "type": "object",
+      "properties": {
+        "inviteCode": { "type": "string", "minLength": 6, "maxLength": 20, "pattern": "^CV-[A-Z0-9]{4,16}$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueName": { "type": "string", "minLength": 3, "maxLength": 60 },
+        "visibility": { "type": "string", "enum": ["PRIVATE", "PUBLIC"] },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "active": { "type": "boolean" },
+        "expiresAt": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["inviteCode", "leagueId", "leagueName", "visibility", "ownerId", "active", "createdAt", "updatedAt"]
+    },
+    "LeagueMember": {
+      "title": "LeagueMember",
+      "description": "League membership record keyed deterministically by {leagueId}__{uid} enforcing unique membership.",
+      "type": "object",
+      "properties": {
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uniquePlayerId": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^CV[0-9]{6,}$" },
+        "username": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "role": { "type": "string", "enum": ["OWNER", "MEMBER"] },
+        "isReady": { "type": "boolean" },
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "joinedViaCode": { "type": "string", "maxLength": 20 },
+        "invitationId": { "type": "string", "maxLength": 128 },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "leagueId",
+        "leagueOwnerId",
+        "userId",
+        "uniquePlayerId",
+        "username",
+        "role",
+        "isReady",
+        "teamId",
+        "joinedAt",
+        "updatedAt"
+      ]
+    },
+    "LeagueTeam": {
+      "title": "LeagueTeam",
+      "description": "Franchise team assigned to one league member keyed deterministically by {leagueId}__{uid}.",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerName": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "ownerPlayerId": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^CV[0-9]{6,}$" },
+        "teamName": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "shortName": { "type": "string", "minLength": 2, "maxLength": 4 },
+        "logoUrl": { "type": "string", "maxLength": 500 },
+        "primaryColor": { "type": "string", "minLength": 4, "maxLength": 12 },
+        "totalPurse": { "type": "integer" },
+        "remainingPurse": { "type": "integer" },
+        "playersCount": { "type": "integer" },
+        "batsmenCount": { "type": "integer" },
+        "bowlersCount": { "type": "integer" },
+        "allRoundersCount": { "type": "integer" },
+        "wicketkeepersCount": { "type": "integer" },
+        "overseasCount": { "type": "integer" },
+        "isSquadComplete": { "type": "boolean" },
+        "squadStatus": { "type": "string", "enum": ["UNFILLED", "MEETS_MIN", "FULL"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "teamId",
+        "leagueId",
+        "leagueOwnerId",
+        "ownerId",
+        "ownerName",
+        "ownerPlayerId",
+        "teamName",
+        "shortName",
+        "primaryColor",
+        "totalPurse",
+        "remainingPurse",
+        "playersCount",
+        "squadStatus",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Server-managed administrator membership record.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "grantedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "grantedAt"]
+    },
+    "CricketPlayer": {
+      "title": "CricketPlayer",
+      "description": "Original fictional cricket player profile and valuation in the centralized pool.",
+      "type": "object",
+      "properties": {
+        "playerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "playerCode": { "type": "string", "minLength": 5, "maxLength": 20, "pattern": "^CVP-[0-9]{4,}$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "imageUrl": { "type": "string", "maxLength": 400000 },
+        "age": { "type": "integer" },
+        "nationality": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "isOverseas": { "type": "boolean" },
+        "nationalityCategory": { "type": "string", "enum": ["DOMESTIC", "OVERSEAS"] },
+        "role": {
+          "type": "string",
+          "enum": ["BATSMAN", "OPENING_BATSMAN", "MIDDLE_ORDER_BATSMAN", "ALL_ROUNDER", "FAST_BOWLER", "SPIN_BOWLER", "BOWLER", "WICKETKEEPER"]
+        },
+        "battingStyle": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "bowlingStyle": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "basePrice": { "type": "integer" },
+        "overallRating": { "type": "integer" },
+        "experienceLevel": { "type": "string", "enum": ["EMERGING", "PROFESSIONAL", "EXPERIENCED", "ELITE"] },
+        "availabilityStatus": { "type": "string", "enum": ["AVAILABLE", "INJURED", "INACTIVE"] },
+        "isActive": { "type": "boolean" },
+        "category": { "type": "string", "enum": ["MARQUEE", "CAPS", "DOMESTIC", "EMERGING"] },
+        "demandScore": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "playerId",
+        "playerCode",
+        "name",
+        "age",
+        "nationality",
+        "isOverseas",
+        "nationalityCategory",
+        "role",
+        "battingStyle",
+        "bowlingStyle",
+        "basePrice",
+        "overallRating",
+        "experienceLevel",
+        "availabilityStatus",
+        "isActive",
+        "category",
+        "updatedAt"
+      ]
+    },
+    "PlayerAttributes": {
+      "title": "PlayerAttributes",
+      "description": "Ten individual cricket skill attributes (0-100) for a fictional player.",
+      "type": "object",
+      "properties": {
+        "playerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "batting": { "type": "integer" },
+        "battingTiming": { "type": "integer" },
+        "powerHitting": { "type": "integer" },
+        "bowling": { "type": "integer" },
+        "bowlingAccuracy": { "type": "integer" },
+        "swing": { "type": "integer" },
+        "spin": { "type": "integer" },
+        "fielding": { "type": "integer" },
+        "stamina": { "type": "integer" },
+        "experience": { "type": "integer" },
+        "overallRating": { "type": "integer" },
+        "isActive": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "playerId",
+        "batting",
+        "battingTiming",
+        "powerHitting",
+        "bowling",
+        "bowlingAccuracy",
+        "swing",
+        "spin",
+        "fielding",
+        "stamina",
+        "experience",
+        "overallRating",
+        "isActive",
+        "updatedAt"
+      ]
+    },
+    "PlayerCategory": {
+      "title": "PlayerCategory",
+      "description": "Configurable player classification definition for roles, experience tiers, and nationality groups.",
+      "type": "object",
+      "properties": {
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "group": { "type": "string", "enum": ["ROLE", "EXPERIENCE", "NATIONALITY"] },
+        "key": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "label": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "rarityMultiplier": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["categoryId", "group", "key", "label", "isActive", "updatedAt"]
+    },
+    "SquadSettings": {
+      "title": "SquadSettings",
+      "description": "Configurable pre-auction squad rule restrictions for a league.",
+      "type": "object",
+      "properties": {
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "minSquadSize": { "type": "integer" },
+        "maxSquadSize": { "type": "integer" },
+        "maxOverseas": { "type": "integer" },
+        "minWicketkeepers": { "type": "integer" },
+        "minBatsmen": { "type": "integer" },
+        "minBowlers": { "type": "integer" },
+        "minAllRounders": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "leagueId",
+        "ownerId",
+        "minSquadSize",
+        "maxSquadSize",
+        "maxOverseas",
+        "minWicketkeepers",
+        "minBatsmen",
+        "minBowlers",
+        "minAllRounders",
+        "updatedAt"
+      ]
+    },
+    "TeamPlayerOwnership": {
+      "title": "TeamPlayerOwnership",
+      "description": "League-scoped player ownership record keyed by {leagueId}__{playerId} preventing duplicate purchases in the same league while enabling independent cross-league ownership.",
+      "type": "object",
+      "properties": {
+        "ownershipId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "playerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "purchasePrice": { "type": "integer" },
+        "purchaseDate": { "type": "string", "format": "date-time" },
+        "ownershipStatus": { "type": "string", "enum": ["OWNED", "RELEASED", "LOANED"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownershipId",
+        "leagueId",
+        "leagueOwnerId",
+        "teamId",
+        "ownerId",
+        "playerId",
+        "purchasePrice",
+        "purchaseDate",
+        "ownershipStatus",
+        "updatedAt"
+      ]
+    },
+    "PlayingXi": {
+      "title": "PlayingXi",
+      "description": "Franchise matchday Playing XI, Captain, Vice-Captain, Wicketkeeper, batting order, bowling options, and substitutes keyed by {leagueId}__{ownerId}.",
+      "type": "object",
+      "properties": {
+        "teamDocId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "captainPlayerId": { "type": "string", "maxLength": 128 },
+        "viceCaptainPlayerId": { "type": "string", "maxLength": 128 },
+        "wicketkeeperPlayerId": { "type": "string", "maxLength": 128 },
+        "playingXiIds": { "type": "array", "description": "Ordered batting XI (max 11 player IDs)" },
+        "bowlingOrderIds": { "type": "array", "description": "Selected bowling options from Playing XI (max 11 player IDs)" },
+        "substituteIds": { "type": "array", "description": "Owned substitute players outside XI (max 25 player IDs)" },
+        "isValidForMatch": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "teamDocId",
+        "leagueId",
+        "leagueOwnerId",
+        "teamId",
+        "ownerId",
+        "playingXiIds",
+        "bowlingOrderIds",
+        "substituteIds",
+        "isValidForMatch",
+        "updatedAt"
+      ]
+    },
+    "PlayerStatistics": {
+      "title": "PlayerStatistics",
+      "description": "Season and career statistics for a fictional player in the pool.",
+      "type": "object",
+      "properties": {
+        "playerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "seasonName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "matchesPlayed": { "type": "integer" },
+        "runs": { "type": "integer" },
+        "strikeRate": { "type": "integer" },
+        "wickets": { "type": "integer" },
+        "economyRate": { "type": "integer" },
+        "ratingOverall": { "type": "integer" },
+        "isActive": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "playerId",
+        "seasonName",
+        "matchesPlayed",
+        "runs",
+        "strikeRate",
+        "wickets",
+        "economyRate",
+        "ratingOverall",
+        "isActive",
+        "updatedAt"
+      ]
+    },
+    "LeagueInvitation": {
+      "title": "LeagueInvitation",
+      "description": "Direct league invite or private join request keyed deterministically by {leagueId}__{targetUid}.",
+      "type": "object",
+      "properties": {
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueName": { "type": "string", "minLength": 3, "maxLength": 60 },
+        "leagueVisibility": { "type": "string", "enum": ["PRIVATE", "PUBLIC"] },
+        "leagueOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "inviteCode": { "type": "string", "maxLength": 20 },
+        "type": { "type": "string", "enum": ["DIRECT_INVITE", "JOIN_REQUEST"] },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderPlayerId": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^CV[0-9]{6,}$" },
+        "senderUsername": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "recipientId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recipientPlayerId": { "type": "string", "minLength": 4, "maxLength": 20, "pattern": "^CV[0-9]{6,}$" },
+        "recipientUsername": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "REJECTED", "EXPIRED", "REVOKED"] },
+        "expiresAt": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "leagueId",
+        "leagueName",
+        "leagueVisibility",
+        "leagueOwnerId",
+        "type",
+        "senderId",
+        "senderPlayerId",
+        "senderUsername",
+        "recipientId",
+        "recipientPlayerId",
+        "recipientUsername",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LeagueActivity": {
+      "title": "LeagueActivity",
+      "description": "Immutable activity feed entry for league creation, joins, team customization, settings, and ownership transfers.",
+      "type": "object",
+      "properties": {
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueName": { "type": "string", "minLength": 3, "maxLength": 60 },
+        "leagueOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "visibility": { "type": "string", "enum": ["PRIVATE", "PUBLIC"] },
+        "memberIds": { "type": "array", "description": "Bounded array of league member UIDs (max 12)" },
+        "actionType": {
+          "type": "string",
+          "enum": [
+            "LEAGUE_CREATED",
+            "MEMBER_JOINED",
+            "MEMBER_LEFT",
+            "MEMBER_REMOVED",
+            "SETTINGS_UPDATED",
+            "TEAM_CUSTOMIZED",
+            "INVITE_SENT",
+            "JOIN_REQUESTED",
+            "OWNERSHIP_TRANSFERRED",
+            "CODE_REGENERATED",
+            "LEAGUE_CANCELLED",
+            "LEAGUE_READY",
+            "AUCTION_STARTED"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1, "maxLength": 260 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "leagueId",
+        "leagueName",
+        "leagueOwnerId",
+        "actorId",
+        "actorName",
+        "visibility",
+        "memberIds",
+        "actionType",
+        "message",
+        "createdAt"
+      ]
+    },
+    "Counter": {
+      "title": "Counter",
+      "description": "Server-managed atomic sequential ID counter.",
+      "type": "object",
+      "properties": {
+        "nextNumber": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nextNumber", "updatedAt"]
+    },
+    "Auction": {
+      "title": "Auction",
+      "description": "Real-time multiplayer auction room state, locked configuration, active lot, and highest bid pointer.",
+      "type": "object",
+      "properties": {
+        "auctionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberIds": { "type": "array", "description": "Bounded array of participating league member UIDs (max 12)" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "state": {
+          "type": "string",
+          "enum": ["CREATED", "WAITING", "LIVE", "BIDDING", "AWAITING_FINALIZATION", "SOLD", "UNSOLD", "PAUSED", "COMPLETED", "CANCELLED"]
+        },
+        "currentLotId": { "type": "string", "maxLength": 128 },
+        "currentPlayerId": { "type": "string", "maxLength": 128 },
+        "currentBid": { "type": "integer" },
+        "highestBidderTeamId": { "type": "string", "maxLength": 128 },
+        "highestBidderUserId": { "type": "string", "maxLength": 128 },
+        "lotDeadlineAt": { "type": "string", "maxLength": 40 },
+        "pausedRemainingMs": { "type": "integer" },
+        "lotOrder": { "type": "integer" },
+        "totalLots": { "type": "integer" },
+        "roundNumber": { "type": "integer" },
+        "timerSeconds": { "type": "integer" },
+        "maxTimerExtensions": { "type": "integer" },
+        "useTieredIncrements": { "type": "boolean" },
+        "tier1Increment": { "type": "integer" },
+        "tier2Increment": { "type": "integer" },
+        "tier3Increment": { "type": "integer" },
+        "playerOrderMode": { "type": "string", "enum": ["RANDOM", "ROLE_BASED", "ADMIN_DEFINED", "MANUAL"] },
+        "enableSecondRound": { "type": "boolean" },
+        "allowSkipPlayer": { "type": "boolean" },
+        "settingsLocked": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "auctionId",
+        "leagueId",
+        "ownerId",
+        "memberIds",
+        "name",
+        "state",
+        "lotOrder",
+        "totalLots",
+        "roundNumber",
+        "timerSeconds",
+        "useTieredIncrements",
+        "tier1Increment",
+        "tier2Increment",
+        "tier3Increment",
+        "playerOrderMode",
+        "enableSecondRound",
+        "allowSkipPlayer",
+        "settingsLocked",
+        "updatedAt"
+      ]
+    },
+    "AuctionParticipant": {
+      "title": "AuctionParticipant",
+      "description": "Authorized participant session in an auction room keyed by {leagueId}__{uid}.",
+      "type": "object",
+      "properties": {
+        "participantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamName": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "ownerName": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "connectionStatus": { "type": "string", "enum": ["CONNECTED", "DISCONNECTED"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participantId", "leagueId", "leagueOwnerId", "userId", "teamId", "teamName", "ownerName", "connectionStatus", "updatedAt"]
+    },
+    "AuctionLot": {
+      "title": "AuctionLot",
+      "description": "Queued, active, sold, or unsold player lot within a league auction.",
+      "type": "object",
+      "properties": {
+        "lotId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "auctionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberIds": { "type": "array", "description": "Bounded array of league member UIDs (max 12)" },
+        "playerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "lotNumber": { "type": "integer" },
+        "roundNumber": { "type": "integer" },
+        "basePrice": { "type": "integer" },
+        "status": { "type": "string", "enum": ["QUEUED", "ACTIVE", "SOLD", "UNSOLD", "SKIPPED"] },
+        "soldPrice": { "type": "integer" },
+        "winningTeamId": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["lotId", "auctionId", "leagueId", "ownerId", "memberIds", "playerId", "lotNumber", "roundNumber", "basePrice", "status", "updatedAt"]
+    },
+    "AuctionBid": {
+      "title": "AuctionBid",
+      "description": "Immutable bid submission record (accepted or rejected) for auction auditing.",
+      "type": "object",
+      "properties": {
+        "bidId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "auctionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "lotId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "playerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bidderUserId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberIds": { "type": "array", "description": "Bounded array of league member UIDs (max 12)" },
+        "amount": { "type": "integer" },
+        "status": { "type": "string", "enum": ["ACCEPTED", "REJECTED"] },
+        "rejectionReason": { "type": "string", "maxLength": 120 },
+        "isWinningBid": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bidId", "auctionId", "leagueId", "lotId", "playerId", "bidderUserId", "teamId", "memberIds", "amount", "status", "isWinningBid", "createdAt"]
+    },
+    "AuctionEvent": {
+      "title": "AuctionEvent",
+      "description": "Immutable real-time auction lifecycle event log.",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "auctionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUserId": { "type": "string", "maxLength": 128 },
+        "memberIds": { "type": "array", "description": "Bounded array of league member UIDs (max 12)" },
+        "eventType": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "amount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "auctionId", "leagueId", "memberIds", "eventType", "createdAt"]
+    },
+    "AuctionResult": {
+      "title": "AuctionResult",
+      "description": "Finalized lot sale or unsold result keyed by {leagueId}__{playerId}.",
+      "type": "object",
+      "properties": {
+        "resultId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "auctionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberIds": { "type": "array", "description": "Bounded array of league member UIDs (max 12)" },
+        "lotId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "playerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "winningTeamId": { "type": "string", "maxLength": 128 },
+        "finalPrice": { "type": "integer" },
+        "status": { "type": "string", "enum": ["SOLD", "UNSOLD"] },
+        "finalizedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["resultId", "auctionId", "leagueId", "ownerId", "memberIds", "lotId", "playerId", "finalPrice", "status", "finalizedAt"]
+    },
+    "TeamPurse": {
+      "title": "TeamPurse",
+      "description": "Integer virtual purse ledger and overseas/squad slot counters per team keyed by {leagueId}__{ownerId}.",
+      "type": "object",
+      "properties": {
+        "purseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "leagueOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberIds": { "type": "array", "description": "Bounded array of league member UIDs (max 12)" },
+        "initialPurse": { "type": "integer" },
+        "remainingPurse": { "type": "integer" },
+        "totalSpent": { "type": "integer" },
+        "squadCount": { "type": "integer" },
+        "overseasCount": { "type": "integer" },
+        "availableSlots": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["purseId", "leagueId", "leagueOwnerId", "teamId", "ownerId", "memberIds", "initialPurse", "remainingPurse", "totalSpent", "squadCount", "overseasCount", "availableSlots", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Private user account metadata and immutable Unique Player ID keyed by Firebase Auth UID."
+    },
+    "/user_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Editable public franchise profile keyed by Firebase Auth UID."
+    },
+    "/player_directory/{playerId}": {
+      "schema": { "$ref": "#/entities/PlayerDirectoryEntry" },
+      "description": "Exact Unique Player ID directory keyed by CV100001 ID."
+    },
+    "/user_statistics/{userId}": {
+      "schema": { "$ref": "#/entities/UserStatistics" },
+      "description": "Match, tournament, and auction participation stats keyed by Firebase Auth UID."
+    },
+    "/friend_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/FriendRequest" },
+      "description": "Friend requests keyed deterministically by sorted pair ID."
+    },
+    "/friends/{friendshipId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Mutual friendships keyed deterministically by sorted pair ID."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Per-user notifications for friend requests, league invites, and auction alerts."
+    },
+    "/leagues/{leagueId}": {
+      "schema": { "$ref": "#/entities/League" },
+      "description": "Multiplayer cricket auction leagues with bounded member list and controlled status."
+    },
+    "/league_settings/{leagueId}": {
+      "schema": { "$ref": "#/entities/LeagueSettings" },
+      "description": "Member-readable league settings and invite code configuration."
+    },
+    "/league_invite_codes/{inviteCode}": {
+      "schema": { "$ref": "#/entities/LeagueInviteCode" },
+      "description": "Exact-key invitation code lookup preventing scraping of private leagues."
+    },
+    "/league_members/{memberId}": {
+      "schema": { "$ref": "#/entities/LeagueMember" },
+      "description": "League membership documents keyed deterministically by {leagueId}__{uid}."
+    },
+    "/league_teams/{teamId}": {
+      "schema": { "$ref": "#/entities/LeagueTeam" },
+      "description": "Unique franchise team per member per league keyed deterministically by {leagueId}__{uid}."
+    },
+    "/league_invitations/{invitationId}": {
+      "schema": { "$ref": "#/entities/LeagueInvitation" },
+      "description": "Direct friend invitations and private league join requests."
+    },
+    "/league_activity/{activityId}": {
+      "schema": { "$ref": "#/entities/LeagueActivity" },
+      "description": "Immutable recent league activity timeline."
+    },
+    "/counters/{counterId}": {
+      "schema": { "$ref": "#/entities/Counter" },
+      "description": "System-only atomic sequential counter for CV100001+ generation."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Server-managed administrator role records."
+    },
+    "/players/{playerId}": {
+      "schema": { "$ref": "#/entities/CricketPlayer" },
+      "description": "Centralized fictional cricket player database."
+    },
+    "/player_attributes/{playerId}": {
+      "schema": { "$ref": "#/entities/PlayerAttributes" },
+      "description": "Ten individual cricket attributes (0-100) per fictional player."
+    },
+    "/player_categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/PlayerCategory" },
+      "description": "Role, experience, and nationality classification definitions."
+    },
+    "/squad_settings/{leagueId}": {
+      "schema": { "$ref": "#/entities/SquadSettings" },
+      "description": "Configurable pre-auction squad restrictions per league."
+    },
+    "/team_players/{ownershipId}": {
+      "schema": { "$ref": "#/entities/TeamPlayerOwnership" },
+      "description": "League-specific player ownership keyed by {leagueId}__{playerId}."
+    },
+    "/playing_xi/{teamDocId}": {
+      "schema": { "$ref": "#/entities/PlayingXi" },
+      "description": "Franchise Playing XI, roles, batting order, bowling options, and substitutes keyed by {leagueId}__{ownerId}."
+    },
+    "/player_statistics/{playerId}": {
+      "schema": { "$ref": "#/entities/PlayerStatistics" },
+      "description": "Fictional player seasonal statistics."
+    },
+    "/auctions/{leagueId}": {
+      "schema": { "$ref": "#/entities/Auction" },
+      "description": "League auction room state, locked rules, active lot, and highest bid pointer."
+    },
+    "/auction_participants/{participantId}": {
+      "schema": { "$ref": "#/entities/AuctionParticipant" },
+      "description": "Participating franchise owner presence keyed by {leagueId}__{uid}."
+    },
+    "/auction_lots/{lotId}": {
+      "schema": { "$ref": "#/entities/AuctionLot" },
+      "description": "Ordered auction player lots within a league auction."
+    },
+    "/auction_bids/{bidId}": {
+      "schema": { "$ref": "#/entities/AuctionBid" },
+      "description": "Immutable bid submission log."
+    },
+    "/auction_events/{eventId}": {
+      "schema": { "$ref": "#/entities/AuctionEvent" },
+      "description": "Immutable real-time auction lifecycle events."
+    },
+    "/auction_results/{resultId}": {
+      "schema": { "$ref": "#/entities/AuctionResult" },
+      "description": "Finalized player auction results keyed by {leagueId}__{playerId}."
+    },
+    "/team_purses/{purseId}": {
+      "schema": { "$ref": "#/entities/TeamPurse" },
+      "description": "Virtual integer purse and overseas slot state keyed by {leagueId}__{ownerId}."
+    }
+  }
+}

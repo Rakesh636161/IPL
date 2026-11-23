@@ -1,0 +1,2246 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Hardened Primitives ---
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid is string && request.auth.uid.size() > 0;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrapAdminEmail() {
+      return isSignedIn()
+        && request.auth.token.email == 'sandugoudar663@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isBootstrapAdminEmail()
+        || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidPlayerCode(code) {
+      return code is string && code.size() >= 6 && code.size() <= 20 && code.matches('^CV[0-9]{6,}$');
+    }
+
+    function isValidInviteCode(code) {
+      return code is string && code.size() >= 6 && code.size() <= 20 && code.matches('^CV-[A-Z0-9]{4,16}$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validation Blueprints ---
+    function isValidUserAccount(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'uniquePlayerId', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'uniquePlayerId', 'role', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid.size() <= 128
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && isValidPlayerCode(data.uniquePlayerId)
+        && data.role == 'USER'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'uniquePlayerId', 'username', 'onlineStatus', 'publicVisible', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid',
+          'uniquePlayerId',
+          'username',
+          'photoUrl',
+          'country',
+          'bio',
+          'preferredRole',
+          'onlineStatus',
+          'publicVisible',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid.size() <= 128
+        && isValidPlayerCode(data.uniquePlayerId)
+        && data.username is string && data.username.size() >= 2 && data.username.size() <= 40
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500))
+        && (!('country' in data) || data.country == null || (data.country is string && data.country.size() <= 40))
+        && (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 160))
+        && (!('preferredRole' in data) || data.preferredRole == null || (data.preferredRole is string && data.preferredRole.size() <= 40))
+        && data.onlineStatus in ['ONLINE', 'IN_AUCTION', 'OFFLINE']
+        && data.publicVisible is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlayerDirectoryEntry(data, playerId) {
+      return data.keys().hasAll(['uid', 'uniquePlayerId', 'username', 'onlineStatus', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'uniquePlayerId', 'username', 'photoUrl', 'onlineStatus', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && isValidPlayerCode(data.uniquePlayerId)
+        && data.uniquePlayerId == playerId
+        && data.username is string && data.username.size() >= 2 && data.username.size() <= 40
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500))
+        && data.onlineStatus in ['ONLINE', 'IN_AUCTION', 'OFFLINE']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserStatistics(data, userId) {
+      return data.keys().hasAll([
+          'uid',
+          'totalMatches',
+          'totalWins',
+          'totalTournaments',
+          'auctionsParticipated',
+          'playersAcquired',
+          'totalSpent',
+          'auctionHistory',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'totalMatches',
+          'totalWins',
+          'totalTournaments',
+          'auctionsParticipated',
+          'playersAcquired',
+          'totalSpent',
+          'auctionHistory',
+          'updatedAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid.size() <= 128
+        && data.totalMatches is int && data.totalMatches >= 0
+        && data.totalWins is int && data.totalWins >= 0
+        && data.totalTournaments is int && data.totalTournaments >= 0
+        && data.auctionsParticipated is int && data.auctionsParticipated >= 0
+        && data.playersAcquired is int && data.playersAcquired >= 0
+        && data.totalSpent is int && data.totalSpent >= 0
+        && data.auctionHistory is list && data.auctionHistory.size() <= 25
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFriendRequest(data) {
+      return data.keys().hasAll([
+          'senderId',
+          'senderPlayerId',
+          'senderUsername',
+          'receiverId',
+          'receiverPlayerId',
+          'receiverUsername',
+          'participants',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'senderId',
+          'senderPlayerId',
+          'senderUsername',
+          'senderPhotoUrl',
+          'receiverId',
+          'receiverPlayerId',
+          'receiverUsername',
+          'receiverPhotoUrl',
+          'participants',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.senderId)
+        && isValidId(data.receiverId)
+        && data.senderId != data.receiverId
+        && isValidPlayerCode(data.senderPlayerId)
+        && isValidPlayerCode(data.receiverPlayerId)
+        && data.senderUsername is string && data.senderUsername.size() >= 2 && data.senderUsername.size() <= 40
+        && data.receiverUsername is string && data.receiverUsername.size() >= 2 && data.receiverUsername.size() <= 40
+        && (!('senderPhotoUrl' in data) || data.senderPhotoUrl == null || (data.senderPhotoUrl is string && data.senderPhotoUrl.size() <= 500))
+        && (!('receiverPhotoUrl' in data) || data.receiverPhotoUrl == null || (data.receiverPhotoUrl is string && data.receiverPhotoUrl.size() <= 500))
+        && data.participants is list
+        && data.participants.size() == 2
+        && data.participants[0] is string
+        && data.participants[1] is string
+        && data.participants.hasAll([data.senderId, data.receiverId])
+        && data.status in ['PENDING', 'ACCEPTED', 'REJECTED']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFriendship(data) {
+      return data.keys().hasAll(['user1Id', 'user2Id', 'participants', 'createdBy', 'createdAt'])
+        && data.keys().hasOnly(['user1Id', 'user2Id', 'participants', 'createdBy', 'createdAt'])
+        && isValidId(data.user1Id)
+        && isValidId(data.user2Id)
+        && data.user1Id != data.user2Id
+        && isValidId(data.createdBy)
+        && data.participants is list
+        && data.participants.size() == 2
+        && data.participants[0] is string
+        && data.participants[1] is string
+        && data.participants.hasAll([data.user1Id, data.user2Id])
+        && data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'senderId', 'type', 'title', 'message', 'read', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'senderId', 'type', 'title', 'message', 'read', 'metadata', 'createdAt'])
+        && isValidId(data.userId)
+        && isValidId(data.senderId)
+        && data.type in [
+          'FRIEND_REQUEST',
+          'FRIEND_ACCEPTED',
+          'LEAGUE_INVITE',
+          'LEAGUE_JOINED',
+          'LEAGUE_REQUEST',
+          'LEAGUE_UPDATE',
+          'AUCTION_ALERT',
+          'SYSTEM'
+        ]
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 320
+        && data.read is bool
+        && (!('metadata' in data) || data.metadata == null || data.metadata is map)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidLeague(data, leagueId) {
+      return data.keys().hasAll([
+          'leagueId',
+          'name',
+          'visibility',
+          'ownerId',
+          'ownerName',
+          'ownerPlayerId',
+          'status',
+          'maxParticipants',
+          'numberOfTeams',
+          'participantCount',
+          'memberIds',
+          'startingPurse',
+          'squadSize',
+          'minPlayers',
+          'maxPlayers',
+          'bidIncrement',
+          'timerDuration',
+          'auctionMode',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'leagueId',
+          'name',
+          'description',
+          'logoUrl',
+          'visibility',
+          'ownerId',
+          'ownerName',
+          'ownerPlayerId',
+          'status',
+          'maxParticipants',
+          'numberOfTeams',
+          'participantCount',
+          'memberIds',
+          'startingPurse',
+          'squadSize',
+          'minPlayers',
+          'maxPlayers',
+          'bidIncrement',
+          'timerDuration',
+          'auctionMode',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.leagueId == leagueId
+        && data.name is string && data.name.size() >= 3 && data.name.size() <= 60
+        && (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 300))
+        && (!('logoUrl' in data) || data.logoUrl == null || (data.logoUrl is string && data.logoUrl.size() <= 500))
+        && data.visibility in ['PRIVATE', 'PUBLIC']
+        && isValidId(data.ownerId)
+        && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 40
+        && isValidPlayerCode(data.ownerPlayerId)
+        && data.status in ['CREATED', 'OPEN', 'FULL', 'READY', 'AUCTION_IN_PROGRESS', 'COMPLETED', 'CANCELLED']
+        && data.maxParticipants is int && data.maxParticipants >= 2 && data.maxParticipants <= 12
+        && data.numberOfTeams is int && data.numberOfTeams >= 2 && data.numberOfTeams <= 12
+        && data.participantCount is int && data.participantCount >= 1 && data.participantCount <= data.maxParticipants
+        && data.memberIds is list
+        && data.memberIds.size() == data.participantCount
+        && data.memberIds.size() <= 12
+        && data.memberIds[0] is string
+        && data.ownerId in data.memberIds
+        && data.startingPurse is int && data.startingPurse >= 1000 && data.startingPurse <= 100000
+        && data.minPlayers is int && data.minPlayers >= 11 && data.minPlayers <= 25
+        && data.maxPlayers is int && data.maxPlayers >= data.minPlayers && data.maxPlayers <= 25
+        && data.squadSize is int && data.squadSize >= data.minPlayers && data.squadSize <= data.maxPlayers
+        && data.bidIncrement is int && data.bidIncrement >= 5 && data.bidIncrement <= 500
+        && data.timerDuration is int && data.timerDuration >= 5 && data.timerDuration <= 60
+        && data.auctionMode in ['MEGA', 'MINI', 'FAST_TRACK']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeagueSettings(data, leagueId) {
+      return data.keys().hasAll([
+          'leagueId',
+          'ownerId',
+          'inviteCode',
+          'inviteCodeActive',
+          'startingPurse',
+          'squadSize',
+          'minPlayers',
+          'maxPlayers',
+          'bidIncrement',
+          'timerDuration',
+          'auctionMode',
+          'allowTeamCustomization',
+          'minBatsmen',
+          'minBowlers',
+          'minAllRounders',
+          'minWicketkeepers',
+          'maxOverseas',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'leagueId',
+          'ownerId',
+          'inviteCode',
+          'inviteCodeActive',
+          'inviteCodeExpiresAt',
+          'startingPurse',
+          'squadSize',
+          'minPlayers',
+          'maxPlayers',
+          'bidIncrement',
+          'timerDuration',
+          'auctionMode',
+          'allowTeamCustomization',
+          'minBatsmen',
+          'minBowlers',
+          'minAllRounders',
+          'minWicketkeepers',
+          'maxOverseas',
+          'updatedAt'
+        ])
+        && data.leagueId == leagueId
+        && isValidId(data.ownerId)
+        && isValidInviteCode(data.inviteCode)
+        && data.inviteCodeActive is bool
+        && (!('inviteCodeExpiresAt' in data) || data.inviteCodeExpiresAt == null || (data.inviteCodeExpiresAt is string && data.inviteCodeExpiresAt.size() <= 40))
+        && data.startingPurse is int && data.startingPurse >= 1000 && data.startingPurse <= 100000
+        && data.minPlayers is int && data.minPlayers >= 11 && data.minPlayers <= 25
+        && data.maxPlayers is int && data.maxPlayers >= data.minPlayers && data.maxPlayers <= 25
+        && data.squadSize is int && data.squadSize >= data.minPlayers && data.squadSize <= data.maxPlayers
+        && data.bidIncrement is int && data.bidIncrement >= 5 && data.bidIncrement <= 500
+        && data.timerDuration is int && data.timerDuration >= 5 && data.timerDuration <= 60
+        && data.auctionMode in ['MEGA', 'MINI', 'FAST_TRACK']
+        && data.allowTeamCustomization is bool
+        && data.minBatsmen is int && data.minBatsmen >= 0 && data.minBatsmen <= 10
+        && data.minBowlers is int && data.minBowlers >= 0 && data.minBowlers <= 10
+        && data.minAllRounders is int && data.minAllRounders >= 0 && data.minAllRounders <= 10
+        && data.minWicketkeepers is int && data.minWicketkeepers >= 0 && data.minWicketkeepers <= 5
+        && data.maxOverseas is int && data.maxOverseas >= 0 && data.maxOverseas <= 11
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeagueInviteCode(data, inviteCode) {
+      return data.keys().hasAll(['inviteCode', 'leagueId', 'leagueName', 'visibility', 'ownerId', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['inviteCode', 'leagueId', 'leagueName', 'visibility', 'ownerId', 'active', 'expiresAt', 'createdAt', 'updatedAt'])
+        && isValidInviteCode(inviteCode)
+        && data.inviteCode == inviteCode
+        && isValidId(data.leagueId)
+        && data.leagueName is string && data.leagueName.size() >= 3 && data.leagueName.size() <= 60
+        && data.visibility in ['PRIVATE', 'PUBLIC']
+        && isValidId(data.ownerId)
+        && data.active is bool
+        && (!('expiresAt' in data) || data.expiresAt == null || (data.expiresAt is string && data.expiresAt.size() <= 40))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeagueMember(data, memberId) {
+      return data.keys().hasAll([
+          'leagueId',
+          'leagueOwnerId',
+          'userId',
+          'uniquePlayerId',
+          'username',
+          'role',
+          'isReady',
+          'teamId',
+          'joinedAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'leagueId',
+          'leagueOwnerId',
+          'userId',
+          'uniquePlayerId',
+          'username',
+          'photoUrl',
+          'role',
+          'isReady',
+          'teamId',
+          'joinedViaCode',
+          'invitationId',
+          'joinedAt',
+          'updatedAt'
+        ])
+        && isValidId(data.leagueId)
+        && isValidId(data.leagueOwnerId)
+        && isValidId(data.userId)
+        && memberId == (data.leagueId + '__' + data.userId)
+        && isValidPlayerCode(data.uniquePlayerId)
+        && data.username is string && data.username.size() >= 2 && data.username.size() <= 40
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500))
+        && data.role in ['OWNER', 'MEMBER']
+        && data.isReady is bool
+        && isValidId(data.teamId)
+        && (!('joinedViaCode' in data) || data.joinedViaCode == null || (data.joinedViaCode is string && data.joinedViaCode.size() <= 20))
+        && (!('invitationId' in data) || data.invitationId == null || isValidId(data.invitationId))
+        && data.joinedAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeagueTeam(data, teamDocId) {
+      return data.keys().hasAll([
+          'teamId',
+          'leagueId',
+          'leagueOwnerId',
+          'ownerId',
+          'ownerName',
+          'ownerPlayerId',
+          'teamName',
+          'shortName',
+          'primaryColor',
+          'totalPurse',
+          'remainingPurse',
+          'playersCount',
+          'squadStatus',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'teamId',
+          'leagueId',
+          'leagueOwnerId',
+          'ownerId',
+          'ownerName',
+          'ownerPlayerId',
+          'teamName',
+          'shortName',
+          'logoUrl',
+          'primaryColor',
+          'totalPurse',
+          'remainingPurse',
+          'playersCount',
+          'batsmenCount',
+          'bowlersCount',
+          'allRoundersCount',
+          'wicketkeepersCount',
+          'overseasCount',
+          'isSquadComplete',
+          'squadStatus',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.teamId)
+        && isValidId(data.leagueId)
+        && isValidId(data.leagueOwnerId)
+        && isValidId(data.ownerId)
+        && teamDocId == (data.leagueId + '__' + data.ownerId)
+        && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 40
+        && isValidPlayerCode(data.ownerPlayerId)
+        && data.teamName is string && data.teamName.size() >= 2 && data.teamName.size() <= 40
+        && data.shortName is string && data.shortName.size() >= 2 && data.shortName.size() <= 4
+        && (!('logoUrl' in data) || data.logoUrl == null || (data.logoUrl is string && data.logoUrl.size() <= 500))
+        && data.primaryColor is string && data.primaryColor.size() >= 4 && data.primaryColor.size() <= 12
+        && data.totalPurse is int && data.totalPurse >= 1000 && data.totalPurse <= 100000
+        && data.remainingPurse is int && data.remainingPurse >= 0 && data.remainingPurse <= data.totalPurse
+        && data.playersCount is int && data.playersCount >= 0 && data.playersCount <= 25
+        && (!('batsmenCount' in data) || (data.batsmenCount is int && data.batsmenCount >= 0 && data.batsmenCount <= 25))
+        && (!('bowlersCount' in data) || (data.bowlersCount is int && data.bowlersCount >= 0 && data.bowlersCount <= 25))
+        && (!('allRoundersCount' in data) || (data.allRoundersCount is int && data.allRoundersCount >= 0 && data.allRoundersCount <= 25))
+        && (!('wicketkeepersCount' in data) || (data.wicketkeepersCount is int && data.wicketkeepersCount >= 0 && data.wicketkeepersCount <= 25))
+        && (!('overseasCount' in data) || (data.overseasCount is int && data.overseasCount >= 0 && data.overseasCount <= 25))
+        && (!('isSquadComplete' in data) || data.isSquadComplete is bool)
+        && data.squadStatus in ['UNFILLED', 'MEETS_MIN', 'FULL']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCricketPlayerCode(code) {
+      return code is string && code.size() >= 5 && code.size() <= 20 && code.matches('^CVP-[0-9]{4,}$');
+    }
+
+    function isValidCricketPlayer(data, playerId) {
+      return data.keys().hasAll([
+          'playerId',
+          'playerCode',
+          'name',
+          'age',
+          'nationality',
+          'isOverseas',
+          'nationalityCategory',
+          'role',
+          'battingStyle',
+          'bowlingStyle',
+          'basePrice',
+          'overallRating',
+          'experienceLevel',
+          'availabilityStatus',
+          'isActive',
+          'category',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'playerId',
+          'playerCode',
+          'name',
+          'imageUrl',
+          'age',
+          'nationality',
+          'isOverseas',
+          'nationalityCategory',
+          'role',
+          'battingStyle',
+          'bowlingStyle',
+          'basePrice',
+          'overallRating',
+          'experienceLevel',
+          'availabilityStatus',
+          'isActive',
+          'category',
+          'demandScore',
+          'updatedAt'
+        ])
+        && data.playerId == playerId
+        && isValidCricketPlayerCode(data.playerCode)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 60
+        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 400000))
+        && data.age is int && data.age >= 16 && data.age <= 48
+        && data.nationality is string && data.nationality.size() >= 2 && data.nationality.size() <= 40
+        && data.isOverseas is bool
+        && data.nationalityCategory in ['DOMESTIC', 'OVERSEAS']
+        && data.role in [
+          'BATSMAN',
+          'OPENING_BATSMAN',
+          'MIDDLE_ORDER_BATSMAN',
+          'ALL_ROUNDER',
+          'FAST_BOWLER',
+          'SPIN_BOWLER',
+          'BOWLER',
+          'WICKETKEEPER'
+        ]
+        && data.battingStyle is string && data.battingStyle.size() >= 2 && data.battingStyle.size() <= 50
+        && data.bowlingStyle is string && data.bowlingStyle.size() >= 2 && data.bowlingStyle.size() <= 50
+        && data.basePrice is int && data.basePrice >= 10 && data.basePrice <= 2000
+        && data.overallRating is int && data.overallRating >= 0 && data.overallRating <= 100
+        && data.experienceLevel in ['EMERGING', 'PROFESSIONAL', 'EXPERIENCED', 'ELITE']
+        && data.availabilityStatus in ['AVAILABLE', 'INJURED', 'INACTIVE']
+        && data.isActive is bool
+        && data.category in ['MARQUEE', 'CAPS', 'DOMESTIC', 'EMERGING']
+        && (!('demandScore' in data) || (data.demandScore is int && data.demandScore >= 70 && data.demandScore <= 140))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlayerAttributes(data, playerId) {
+      return data.keys().hasAll([
+          'playerId',
+          'batting',
+          'battingTiming',
+          'powerHitting',
+          'bowling',
+          'bowlingAccuracy',
+          'swing',
+          'spin',
+          'fielding',
+          'stamina',
+          'experience',
+          'overallRating',
+          'isActive',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'playerId',
+          'batting',
+          'battingTiming',
+          'powerHitting',
+          'bowling',
+          'bowlingAccuracy',
+          'swing',
+          'spin',
+          'fielding',
+          'stamina',
+          'experience',
+          'overallRating',
+          'isActive',
+          'updatedAt'
+        ])
+        && data.playerId == playerId
+        && data.batting is int && data.batting >= 0 && data.batting <= 100
+        && data.battingTiming is int && data.battingTiming >= 0 && data.battingTiming <= 100
+        && data.powerHitting is int && data.powerHitting >= 0 && data.powerHitting <= 100
+        && data.bowling is int && data.bowling >= 0 && data.bowling <= 100
+        && data.bowlingAccuracy is int && data.bowlingAccuracy >= 0 && data.bowlingAccuracy <= 100
+        && data.swing is int && data.swing >= 0 && data.swing <= 100
+        && data.spin is int && data.spin >= 0 && data.spin <= 100
+        && data.fielding is int && data.fielding >= 0 && data.fielding <= 100
+        && data.stamina is int && data.stamina >= 0 && data.stamina <= 100
+        && data.experience is int && data.experience >= 0 && data.experience <= 100
+        && data.overallRating is int && data.overallRating >= 0 && data.overallRating <= 100
+        && data.isActive is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlayerCategory(data, categoryId) {
+      return data.keys().hasAll(['categoryId', 'group', 'key', 'label', 'isActive', 'updatedAt'])
+        && data.keys().hasOnly(['categoryId', 'group', 'key', 'label', 'rarityMultiplier', 'isActive', 'updatedAt'])
+        && data.categoryId == categoryId
+        && data.group in ['ROLE', 'EXPERIENCE', 'NATIONALITY']
+        && data.key is string && data.key.size() >= 2 && data.key.size() <= 40
+        && data.label is string && data.label.size() >= 2 && data.label.size() <= 60
+        && (!('rarityMultiplier' in data) || (data.rarityMultiplier is number && data.rarityMultiplier >= 0.5 && data.rarityMultiplier <= 3.0))
+        && data.isActive is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSquadSettings(data, leagueId) {
+      return data.keys().hasAll([
+          'leagueId',
+          'ownerId',
+          'minSquadSize',
+          'maxSquadSize',
+          'maxOverseas',
+          'minWicketkeepers',
+          'minBatsmen',
+          'minBowlers',
+          'minAllRounders',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'leagueId',
+          'ownerId',
+          'minSquadSize',
+          'maxSquadSize',
+          'maxOverseas',
+          'minWicketkeepers',
+          'minBatsmen',
+          'minBowlers',
+          'minAllRounders',
+          'updatedAt'
+        ])
+        && data.leagueId == leagueId
+        && isValidId(data.ownerId)
+        && data.minSquadSize is int && data.minSquadSize >= 11 && data.minSquadSize <= 25
+        && data.maxSquadSize is int && data.maxSquadSize >= data.minSquadSize && data.maxSquadSize <= 25
+        && data.maxOverseas is int && data.maxOverseas >= 0 && data.maxOverseas <= 12
+        && data.minWicketkeepers is int && data.minWicketkeepers >= 0 && data.minWicketkeepers <= 5
+        && data.minBatsmen is int && data.minBatsmen >= 0 && data.minBatsmen <= 10
+        && data.minBowlers is int && data.minBowlers >= 0 && data.minBowlers <= 10
+        && data.minAllRounders is int && data.minAllRounders >= 0 && data.minAllRounders <= 10
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTeamPlayerOwnership(data, ownershipId) {
+      return data.keys().hasAll([
+          'ownershipId',
+          'leagueId',
+          'leagueOwnerId',
+          'teamId',
+          'ownerId',
+          'playerId',
+          'purchasePrice',
+          'purchaseDate',
+          'ownershipStatus',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownershipId',
+          'leagueId',
+          'leagueOwnerId',
+          'teamId',
+          'ownerId',
+          'playerId',
+          'purchasePrice',
+          'purchaseDate',
+          'ownershipStatus',
+          'updatedAt'
+        ])
+        && isValidId(data.leagueId)
+        && isValidId(data.leagueOwnerId)
+        && isValidId(data.teamId)
+        && isValidId(data.ownerId)
+        && isValidId(data.playerId)
+        && data.ownershipId == ownershipId
+        && ownershipId == (data.leagueId + '__' + data.playerId)
+        && data.purchasePrice is int && data.purchasePrice > 0 && data.purchasePrice <= 100000
+        && data.purchaseDate is timestamp
+        && data.ownershipStatus in ['OWNED', 'RELEASED', 'LOANED']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlayingXi(data, teamDocId) {
+      return data.keys().hasAll([
+          'teamDocId',
+          'leagueId',
+          'leagueOwnerId',
+          'teamId',
+          'ownerId',
+          'playingXiIds',
+          'bowlingOrderIds',
+          'substituteIds',
+          'isValidForMatch',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'teamDocId',
+          'leagueId',
+          'leagueOwnerId',
+          'teamId',
+          'ownerId',
+          'captainPlayerId',
+          'viceCaptainPlayerId',
+          'wicketkeeperPlayerId',
+          'playingXiIds',
+          'bowlingOrderIds',
+          'substituteIds',
+          'isValidForMatch',
+          'updatedAt'
+        ])
+        && isValidId(data.leagueId)
+        && isValidId(data.leagueOwnerId)
+        && isValidId(data.teamId)
+        && isValidId(data.ownerId)
+        && data.teamDocId == teamDocId
+        && teamDocId == (data.leagueId + '__' + data.ownerId)
+        && (!('captainPlayerId' in data) || data.captainPlayerId == null || isValidId(data.captainPlayerId))
+        && (!('viceCaptainPlayerId' in data) || data.viceCaptainPlayerId == null || isValidId(data.viceCaptainPlayerId))
+        && (!('wicketkeeperPlayerId' in data) || data.wicketkeeperPlayerId == null || isValidId(data.wicketkeeperPlayerId))
+        && (data.captainPlayerId == null || data.viceCaptainPlayerId == null || data.captainPlayerId != data.viceCaptainPlayerId)
+        && data.playingXiIds is list && data.playingXiIds.size() <= 11
+        && (data.playingXiIds.size() == 0 || data.playingXiIds[0] is string)
+        && data.bowlingOrderIds is list && data.bowlingOrderIds.size() <= 11
+        && (data.bowlingOrderIds.size() == 0 || data.bowlingOrderIds[0] is string)
+        && data.substituteIds is list && data.substituteIds.size() <= 25
+        && (data.substituteIds.size() == 0 || data.substituteIds[0] is string)
+        && data.isValidForMatch is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPlayerStatistics(data, playerId) {
+      return data.keys().hasAll([
+          'playerId',
+          'seasonName',
+          'matchesPlayed',
+          'runs',
+          'strikeRate',
+          'wickets',
+          'economyRate',
+          'ratingOverall',
+          'isActive',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'playerId',
+          'seasonName',
+          'matchesPlayed',
+          'runs',
+          'strikeRate',
+          'wickets',
+          'economyRate',
+          'ratingOverall',
+          'isActive',
+          'updatedAt'
+        ])
+        && data.playerId == playerId
+        && data.seasonName is string && data.seasonName.size() >= 2 && data.seasonName.size() <= 60
+        && data.matchesPlayed is int && data.matchesPlayed >= 0
+        && data.runs is int && data.runs >= 0
+        && data.strikeRate is int && data.strikeRate >= 0
+        && data.wickets is int && data.wickets >= 0
+        && data.economyRate is int && data.economyRate >= 0
+        && data.ratingOverall is int && data.ratingOverall >= 0 && data.ratingOverall <= 100
+        && data.isActive is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeagueInvitation(data) {
+      return data.keys().hasAll([
+          'leagueId',
+          'leagueName',
+          'leagueVisibility',
+          'leagueOwnerId',
+          'type',
+          'senderId',
+          'senderPlayerId',
+          'senderUsername',
+          'recipientId',
+          'recipientPlayerId',
+          'recipientUsername',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'leagueId',
+          'leagueName',
+          'leagueVisibility',
+          'leagueOwnerId',
+          'inviteCode',
+          'type',
+          'senderId',
+          'senderPlayerId',
+          'senderUsername',
+          'recipientId',
+          'recipientPlayerId',
+          'recipientUsername',
+          'status',
+          'expiresAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.leagueId)
+        && data.leagueName is string && data.leagueName.size() >= 3 && data.leagueName.size() <= 60
+        && data.leagueVisibility in ['PRIVATE', 'PUBLIC']
+        && isValidId(data.leagueOwnerId)
+        && (!('inviteCode' in data) || data.inviteCode == null || (data.inviteCode is string && data.inviteCode.size() <= 20))
+        && data.type in ['DIRECT_INVITE', 'JOIN_REQUEST']
+        && isValidId(data.senderId)
+        && isValidId(data.recipientId)
+        && data.senderId != data.recipientId
+        && isValidPlayerCode(data.senderPlayerId)
+        && isValidPlayerCode(data.recipientPlayerId)
+        && data.senderUsername is string && data.senderUsername.size() >= 2 && data.senderUsername.size() <= 40
+        && data.recipientUsername is string && data.recipientUsername.size() >= 2 && data.recipientUsername.size() <= 40
+        && data.status in ['PENDING', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'REVOKED']
+        && (!('expiresAt' in data) || data.expiresAt == null || (data.expiresAt is string && data.expiresAt.size() <= 40))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeagueActivity(data) {
+      return data.keys().hasAll([
+          'leagueId',
+          'leagueName',
+          'leagueOwnerId',
+          'actorId',
+          'actorName',
+          'visibility',
+          'memberIds',
+          'actionType',
+          'message',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'leagueId',
+          'leagueName',
+          'leagueOwnerId',
+          'actorId',
+          'actorName',
+          'visibility',
+          'memberIds',
+          'actionType',
+          'message',
+          'createdAt'
+        ])
+        && isValidId(data.leagueId)
+        && data.leagueName is string && data.leagueName.size() >= 3 && data.leagueName.size() <= 60
+        && isValidId(data.leagueOwnerId)
+        && isValidId(data.actorId)
+        && data.actorName is string && data.actorName.size() >= 2 && data.actorName.size() <= 40
+        && data.visibility in ['PRIVATE', 'PUBLIC']
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 12 && data.memberIds[0] is string
+        && data.actionType in [
+          'LEAGUE_CREATED',
+          'MEMBER_JOINED',
+          'MEMBER_LEFT',
+          'MEMBER_REMOVED',
+          'SETTINGS_UPDATED',
+          'TEAM_CUSTOMIZED',
+          'INVITE_SENT',
+          'JOIN_REQUESTED',
+          'OWNERSHIP_TRANSFERRED',
+          'CODE_REGENERATED',
+          'LEAGUE_CANCELLED',
+          'LEAGUE_READY',
+          'AUCTION_STARTED'
+        ]
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 260
+        && data.createdAt is timestamp;
+    }
+
+    // --- Prompt 5: Real-Time Multiplayer Auction Validators ---
+    function isValidAuction(data, leagueId) {
+      return data.keys().hasAll([
+          'auctionId',
+          'leagueId',
+          'ownerId',
+          'memberIds',
+          'name',
+          'state',
+          'lotOrder',
+          'totalLots',
+          'roundNumber',
+          'timerSeconds',
+          'useTieredIncrements',
+          'tier1Increment',
+          'tier2Increment',
+          'tier3Increment',
+          'playerOrderMode',
+          'enableSecondRound',
+          'allowSkipPlayer',
+          'settingsLocked',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'auctionId',
+          'leagueId',
+          'ownerId',
+          'memberIds',
+          'name',
+          'state',
+          'currentLotId',
+          'currentPlayerId',
+          'currentBid',
+          'highestBidderTeamId',
+          'highestBidderUserId',
+          'lotDeadlineAt',
+          'pausedRemainingMs',
+          'lotOrder',
+          'totalLots',
+          'roundNumber',
+          'timerSeconds',
+          'maxTimerExtensions',
+          'useTieredIncrements',
+          'tier1Increment',
+          'tier2Increment',
+          'tier3Increment',
+          'playerOrderMode',
+          'enableSecondRound',
+          'allowSkipPlayer',
+          'settingsLocked',
+          'updatedAt'
+        ])
+        && isValidId(data.auctionId)
+        && data.leagueId == leagueId
+        && isValidId(data.ownerId)
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 12 && data.memberIds[0] is string
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 80
+        && data.state in ['CREATED', 'WAITING', 'LIVE', 'BIDDING', 'AWAITING_FINALIZATION', 'SOLD', 'UNSOLD', 'PAUSED', 'COMPLETED', 'CANCELLED']
+        && (!('currentLotId' in data) || data.currentLotId == null || isValidId(data.currentLotId))
+        && (!('currentPlayerId' in data) || data.currentPlayerId == null || isValidId(data.currentPlayerId))
+        && (!('currentBid' in data) || data.currentBid == null || (data.currentBid is int && data.currentBid > 0))
+        && (!('highestBidderTeamId' in data) || data.highestBidderTeamId == null || isValidId(data.highestBidderTeamId))
+        && (!('highestBidderUserId' in data) || data.highestBidderUserId == null || isValidId(data.highestBidderUserId))
+        && (!('lotDeadlineAt' in data) || data.lotDeadlineAt == null || (data.lotDeadlineAt is string && data.lotDeadlineAt.size() <= 40))
+        && (!('pausedRemainingMs' in data) || data.pausedRemainingMs == null || (data.pausedRemainingMs is int && data.pausedRemainingMs >= 0))
+        && data.lotOrder is int && data.lotOrder >= 0
+        && data.totalLots is int && data.totalLots >= 0
+        && data.roundNumber is int && data.roundNumber >= 1
+        && data.timerSeconds is int && data.timerSeconds >= 5 && data.timerSeconds <= 120
+        && (!('maxTimerExtensions' in data) || data.maxTimerExtensions == null || (data.maxTimerExtensions is int && data.maxTimerExtensions >= 0 && data.maxTimerExtensions <= 100))
+        && data.useTieredIncrements is bool
+        && data.tier1Increment is int && data.tier1Increment >= 1 && data.tier1Increment <= 200
+        && data.tier2Increment is int && data.tier2Increment >= 1 && data.tier2Increment <= 500
+        && data.tier3Increment is int && data.tier3Increment >= 1 && data.tier3Increment <= 1000
+        && data.playerOrderMode in ['RANDOM', 'ROLE_BASED', 'ADMIN_DEFINED', 'MANUAL']
+        && data.enableSecondRound is bool
+        && data.allowSkipPlayer is bool
+        && data.settingsLocked is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuctionParticipant(data, participantId) {
+      return data.keys().hasAll([
+          'participantId',
+          'leagueId',
+          'leagueOwnerId',
+          'userId',
+          'teamId',
+          'teamName',
+          'ownerName',
+          'connectionStatus',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'participantId',
+          'leagueId',
+          'leagueOwnerId',
+          'userId',
+          'teamId',
+          'teamName',
+          'ownerName',
+          'connectionStatus',
+          'updatedAt'
+        ])
+        && data.participantId == participantId
+        && isValidId(data.leagueId)
+        && isValidId(data.leagueOwnerId)
+        && isValidId(data.userId)
+        && participantId == (data.leagueId + '__' + data.userId)
+        && isValidId(data.teamId)
+        && data.teamName is string && data.teamName.size() >= 2 && data.teamName.size() <= 40
+        && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 40
+        && data.connectionStatus in ['CONNECTED', 'DISCONNECTED']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuctionLot(data, lotId) {
+      return data.keys().hasAll([
+          'lotId',
+          'auctionId',
+          'leagueId',
+          'ownerId',
+          'memberIds',
+          'playerId',
+          'lotNumber',
+          'roundNumber',
+          'basePrice',
+          'status',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'lotId',
+          'auctionId',
+          'leagueId',
+          'ownerId',
+          'memberIds',
+          'playerId',
+          'lotNumber',
+          'roundNumber',
+          'basePrice',
+          'status',
+          'soldPrice',
+          'winningTeamId',
+          'updatedAt'
+        ])
+        && data.lotId == lotId
+        && isValidId(data.auctionId)
+        && isValidId(data.leagueId)
+        && isValidId(data.ownerId)
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 12 && data.memberIds[0] is string
+        && isValidId(data.playerId)
+        && data.lotNumber is int && data.lotNumber >= 1
+        && data.roundNumber is int && data.roundNumber >= 1
+        && data.basePrice is int && data.basePrice > 0 && data.basePrice <= 100000
+        && data.status in ['QUEUED', 'ACTIVE', 'SOLD', 'UNSOLD', 'SKIPPED']
+        && (!('soldPrice' in data) || data.soldPrice == null || (data.soldPrice is int && data.soldPrice >= 0))
+        && (!('winningTeamId' in data) || data.winningTeamId == null || isValidId(data.winningTeamId))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuctionBid(data, bidId) {
+      return data.keys().hasAll([
+          'bidId',
+          'auctionId',
+          'leagueId',
+          'lotId',
+          'playerId',
+          'bidderUserId',
+          'teamId',
+          'memberIds',
+          'amount',
+          'status',
+          'isWinningBid',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'bidId',
+          'auctionId',
+          'leagueId',
+          'lotId',
+          'playerId',
+          'bidderUserId',
+          'teamId',
+          'memberIds',
+          'amount',
+          'status',
+          'rejectionReason',
+          'isWinningBid',
+          'createdAt'
+        ])
+        && data.bidId == bidId
+        && isValidId(data.auctionId)
+        && isValidId(data.leagueId)
+        && isValidId(data.lotId)
+        && isValidId(data.playerId)
+        && isValidId(data.bidderUserId)
+        && isValidId(data.teamId)
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 12 && data.memberIds[0] is string
+        && data.amount is int && data.amount > 0 && data.amount <= 100000
+        && data.status in ['ACCEPTED', 'REJECTED']
+        && (!('rejectionReason' in data) || data.rejectionReason == null || (data.rejectionReason is string && data.rejectionReason.size() <= 120))
+        && data.isWinningBid is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAuctionEvent(data, eventId) {
+      return data.keys().hasAll(['eventId', 'auctionId', 'leagueId', 'memberIds', 'eventType', 'createdAt'])
+        && data.keys().hasOnly(['eventId', 'auctionId', 'leagueId', 'actorUserId', 'memberIds', 'eventType', 'amount', 'createdAt'])
+        && data.eventId == eventId
+        && isValidId(data.auctionId)
+        && isValidId(data.leagueId)
+        && (!('actorUserId' in data) || data.actorUserId == null || isValidId(data.actorUserId))
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 12 && data.memberIds[0] is string
+        && data.eventType is string && data.eventType.size() >= 2 && data.eventType.size() <= 40
+        && (!('amount' in data) || data.amount == null || (data.amount is int && data.amount >= 0))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAuctionResult(data, resultId) {
+      return data.keys().hasAll([
+          'resultId',
+          'auctionId',
+          'leagueId',
+          'ownerId',
+          'memberIds',
+          'lotId',
+          'playerId',
+          'finalPrice',
+          'status',
+          'finalizedAt'
+        ])
+        && data.keys().hasOnly([
+          'resultId',
+          'auctionId',
+          'leagueId',
+          'ownerId',
+          'memberIds',
+          'lotId',
+          'playerId',
+          'winningTeamId',
+          'finalPrice',
+          'status',
+          'finalizedAt'
+        ])
+        && data.resultId == resultId
+        && resultId == (data.leagueId + '__' + data.playerId)
+        && isValidId(data.auctionId)
+        && isValidId(data.leagueId)
+        && isValidId(data.ownerId)
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 12 && data.memberIds[0] is string
+        && isValidId(data.lotId)
+        && isValidId(data.playerId)
+        && (!('winningTeamId' in data) || data.winningTeamId == null || isValidId(data.winningTeamId))
+        && data.finalPrice is int && data.finalPrice >= 0 && data.finalPrice <= 100000
+        && data.status in ['SOLD', 'UNSOLD']
+        && data.finalizedAt is timestamp;
+    }
+
+    function isValidTeamPurse(data, purseId) {
+      return data.keys().hasAll([
+          'purseId',
+          'leagueId',
+          'leagueOwnerId',
+          'teamId',
+          'ownerId',
+          'memberIds',
+          'initialPurse',
+          'remainingPurse',
+          'totalSpent',
+          'squadCount',
+          'overseasCount',
+          'availableSlots',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'purseId',
+          'leagueId',
+          'leagueOwnerId',
+          'teamId',
+          'ownerId',
+          'memberIds',
+          'initialPurse',
+          'remainingPurse',
+          'totalSpent',
+          'squadCount',
+          'overseasCount',
+          'availableSlots',
+          'updatedAt'
+        ])
+        && data.purseId == purseId
+        && purseId == (data.leagueId + '__' + data.ownerId)
+        && isValidId(data.leagueId)
+        && isValidId(data.leagueOwnerId)
+        && isValidId(data.teamId)
+        && isValidId(data.ownerId)
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 12 && data.memberIds[0] is string
+        && data.initialPurse is int && data.initialPurse >= 500 && data.initialPurse <= 100000
+        && data.remainingPurse is int && data.remainingPurse >= 0 && data.remainingPurse <= data.initialPurse
+        && data.totalSpent is int && data.totalSpent >= 0 && data.totalSpent == (data.initialPurse - data.remainingPurse)
+        && data.squadCount is int && data.squadCount >= 0 && data.squadCount <= 25
+        && data.overseasCount is int && data.overseasCount >= 0 && data.overseasCount <= 25
+        && data.availableSlots is int && data.availableSlots >= 0 && data.availableSlots <= 25
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Match Rules ---
+
+    // Private PII Account Doc (Owner create/read only, immutable uniquePlayerId & role)
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().uniquePlayerId == existing().uniquePlayerId
+        && incoming().role == existing().role
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Public Franchise Profile
+    match /user_profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || resource.data.publicVisible == true);
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().uniquePlayerId == existing().uniquePlayerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'username',
+          'photoUrl',
+          'country',
+          'bio',
+          'preferredRole',
+          'onlineStatus',
+          'publicVisible',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // Exact Unique Player ID lookup (zero list scraping)
+    match /player_directory/{playerId} {
+      allow get: if isSignedIn() && isValidPlayerCode(playerId);
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidPlayerCode(playerId)
+        && isValidPlayerDirectoryEntry(incoming(), playerId)
+        && incoming().uid == request.auth.uid
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidPlayerCode(playerId)
+        && isValidPlayerDirectoryEntry(incoming(), playerId)
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().uniquePlayerId == existing().uniquePlayerId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['username', 'photoUrl', 'onlineStatus', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // User Statistics & Auction History
+    match /user_statistics/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserStatistics(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserStatistics(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // Friend Requests
+    match /friend_requests/{requestId} {
+      allow get: if isSignedIn()
+        && isValidId(requestId)
+        && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+
+      allow create: if isSignedIn()
+        && isValidId(requestId)
+        && isValidFriendRequest(incoming())
+        && incoming().senderId == request.auth.uid
+        && incoming().status == 'PENDING'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/user_profiles/$(incoming().senderId))
+        && exists(/databases/$(database)/documents/user_profiles/$(incoming().receiverId));
+
+      allow update: if isSignedIn()
+        && isValidId(requestId)
+        && isValidFriendRequest(incoming())
+        && existing().status == 'PENDING'
+        && incoming().senderId == existing().senderId
+        && incoming().receiverId == existing().receiverId
+        && incoming().senderPlayerId == existing().senderPlayerId
+        && incoming().receiverPlayerId == existing().receiverPlayerId
+        && incoming().participants == existing().participants
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && request.auth.uid == existing().receiverId
+        && incoming().status in ['ACCEPTED', 'REJECTED']
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if isSignedIn()
+        && isValidId(requestId)
+        && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+    }
+
+    // Mutual Friendships
+    match /friends/{friendshipId} {
+      allow get: if isSignedIn()
+        && isValidId(friendshipId)
+        && request.auth.uid in resource.data.participants;
+
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+
+      allow create: if isSignedIn()
+        && isValidId(friendshipId)
+        && isValidFriendship(incoming())
+        && incoming().createdBy == request.auth.uid
+        && request.auth.uid in incoming().participants
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/friend_requests/$(friendshipId))
+        && get(/databases/$(database)/documents/friend_requests/$(friendshipId)).data.status == 'PENDING'
+        && getAfter(/databases/$(database)/documents/friend_requests/$(friendshipId)).data.status == 'ACCEPTED'
+        && request.auth.uid == getAfter(/databases/$(database)/documents/friend_requests/$(friendshipId)).data.receiverId;
+
+      allow update: if false;
+
+      allow delete: if isSignedIn()
+        && isValidId(friendshipId)
+        && request.auth.uid in resource.data.participants;
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn()
+        && isValidId(notificationId)
+        && resource.data.userId == request.auth.uid;
+
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && incoming().senderId == request.auth.uid
+        && incoming().read == false
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/user_profiles/$(incoming().userId));
+
+      allow update: if isSignedIn()
+        && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().senderId == existing().senderId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+
+      allow delete: if isSignedIn()
+        && isValidId(notificationId)
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // --- Prompt 3: Multiplayer Leagues, Settings, Invite Codes, Members, Teams, Invitations & Activity ---
+
+    match /leagues/{leagueId} {
+      allow get: if isSignedIn() && isValidId(leagueId);
+
+      // Enforced query filter: public directory OR member of league (bounded memberIds <= 12, zero get())
+      allow list: if isSignedIn()
+        && (resource.data.visibility == 'PUBLIC' || request.auth.uid in resource.data.memberIds);
+
+      allow create: if isSignedIn()
+        && isValidId(leagueId)
+        && isValidLeague(incoming(), leagueId)
+        && incoming().ownerId == request.auth.uid
+        && incoming().participantCount == 1
+        && incoming().memberIds.size() == 1
+        && incoming().memberIds[0] == request.auth.uid
+        && incoming().status in ['CREATED', 'OPEN']
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/league_members/$(leagueId + '__' + request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/league_settings/$(leagueId))
+        && existsAfter(/databases/$(database)/documents/league_teams/$(leagueId + '__' + request.auth.uid));
+
+      allow update: if isSignedIn()
+        && isValidId(leagueId)
+        && isValidLeague(incoming(), leagueId)
+        && incoming().leagueId == existing().leagueId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && !(existing().status in ['COMPLETED', 'CANCELLED'])
+        && (
+          // Action 1: New member joins league (atomic sync with league_members & league_teams)
+          (
+            !(request.auth.uid in existing().memberIds)
+            && existing().status in ['CREATED', 'OPEN', 'READY']
+            && existing().participantCount < existing().maxParticipants
+            && incoming().ownerId == existing().ownerId
+            && incoming().participantCount == existing().participantCount + 1
+            && incoming().memberIds.size() == existing().memberIds.size() + 1
+            && incoming().memberIds.hasAll(existing().memberIds)
+            && request.auth.uid in incoming().memberIds
+            && incoming().status == (incoming().participantCount >= existing().maxParticipants ? 'FULL' : existing().status)
+            && existsAfter(/databases/$(database)/documents/league_members/$(leagueId + '__' + request.auth.uid))
+            && existsAfter(/databases/$(database)/documents/league_teams/$(leagueId + '__' + request.auth.uid))
+            && incoming().diff(existing()).affectedKeys().hasOnly(['participantCount', 'memberIds', 'status', 'updatedAt'])
+          ) ||
+          // Action 2: Non-owner member leaves pre-auction league
+          (
+            request.auth.uid in existing().memberIds
+            && request.auth.uid != existing().ownerId
+            && existing().status in ['CREATED', 'OPEN', 'FULL', 'READY']
+            && incoming().ownerId == existing().ownerId
+            && incoming().participantCount == existing().participantCount - 1
+            && incoming().memberIds.size() == existing().memberIds.size() - 1
+            && !(request.auth.uid in incoming().memberIds)
+            && existing().memberIds.hasAll(incoming().memberIds)
+            && incoming().status in ['CREATED', 'OPEN', 'READY']
+            && !existsAfter(/databases/$(database)/documents/league_members/$(leagueId + '__' + request.auth.uid))
+            && !existsAfter(/databases/$(database)/documents/league_teams/$(leagueId + '__' + request.auth.uid))
+            && incoming().diff(existing()).affectedKeys().hasOnly(['participantCount', 'memberIds', 'status', 'updatedAt'])
+          ) ||
+          // Action 3: League owner approves private join request (adds 1 member)
+          (
+            existing().ownerId == request.auth.uid
+            && existing().status in ['CREATED', 'OPEN', 'READY']
+            && existing().participantCount < existing().maxParticipants
+            && incoming().ownerId == existing().ownerId
+            && incoming().participantCount == existing().participantCount + 1
+            && incoming().memberIds.size() == existing().memberIds.size() + 1
+            && incoming().memberIds.hasAll(existing().memberIds)
+            && incoming().status == (incoming().participantCount >= existing().maxParticipants ? 'FULL' : existing().status)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['participantCount', 'memberIds', 'status', 'updatedAt'])
+          ) ||
+          // Action 4: League owner removes a member pre-auction
+          (
+            existing().ownerId == request.auth.uid
+            && existing().status in ['CREATED', 'OPEN', 'FULL', 'READY']
+            && incoming().ownerId == existing().ownerId
+            && incoming().participantCount == existing().participantCount - 1
+            && incoming().memberIds.size() == existing().memberIds.size() - 1
+            && existing().memberIds.hasAll(incoming().memberIds)
+            && existing().ownerId in incoming().memberIds
+            && incoming().status in ['CREATED', 'OPEN', 'READY']
+            && incoming().diff(existing()).affectedKeys().hasOnly(['participantCount', 'memberIds', 'status', 'updatedAt'])
+          ) ||
+          // Action 5: League owner edits pre-auction settings, status (READY / AUCTION_IN_PROGRESS / CANCELLED)
+          (
+            existing().ownerId == request.auth.uid
+            && existing().status in ['CREATED', 'OPEN', 'FULL', 'READY']
+            && incoming().ownerId == existing().ownerId
+            && incoming().participantCount == existing().participantCount
+            && incoming().memberIds == existing().memberIds
+            && incoming().maxParticipants >= existing().participantCount
+            && incoming().status in ['CREATED', 'OPEN', 'FULL', 'READY', 'AUCTION_IN_PROGRESS', 'CANCELLED']
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name',
+              'description',
+              'logoUrl',
+              'visibility',
+              'maxParticipants',
+              'numberOfTeams',
+              'startingPurse',
+              'squadSize',
+              'minPlayers',
+              'maxPlayers',
+              'bidIncrement',
+              'timerDuration',
+              'auctionMode',
+              'status',
+              'updatedAt'
+            ])
+          ) ||
+          // Action 6: Owner transfers ownership to another current member pre-auction
+          (
+            existing().ownerId == request.auth.uid
+            && existing().status in ['CREATED', 'OPEN', 'FULL', 'READY']
+            && incoming().ownerId != existing().ownerId
+            && incoming().ownerId in existing().memberIds
+            && incoming().diff(existing()).affectedKeys().hasOnly(['ownerId', 'ownerName', 'ownerPlayerId', 'updatedAt'])
+          ) ||
+          // Action 7: Owner marks in-progress auction completed
+          (
+            existing().ownerId == request.auth.uid
+            && existing().status == 'AUCTION_IN_PROGRESS'
+            && incoming().status == 'COMPLETED'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /league_settings/{leagueId} {
+      allow get: if isSignedIn()
+        && isValidId(leagueId)
+        && (
+          resource.data.ownerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/leagues/$(leagueId)).data.memberIds
+        );
+
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && isValidId(leagueId)
+        && isValidLeagueSettings(incoming(), leagueId)
+        && incoming().ownerId == request.auth.uid
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/leagues/$(leagueId));
+
+      allow update: if isSignedIn()
+        && isValidId(leagueId)
+        && isValidLeagueSettings(incoming(), leagueId)
+        && existing().ownerId == request.auth.uid
+        && incoming().leagueId == existing().leagueId
+        && incoming().updatedAt == request.time
+        && get(/databases/$(database)/documents/leagues/$(leagueId)).data.status in ['CREATED', 'OPEN', 'FULL', 'READY']
+        && (
+          // Edit settings or invite code pre-auction
+          (
+            incoming().ownerId == existing().ownerId
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'inviteCode',
+              'inviteCodeActive',
+              'inviteCodeExpiresAt',
+              'startingPurse',
+              'squadSize',
+              'minPlayers',
+              'maxPlayers',
+              'bidIncrement',
+              'timerDuration',
+              'auctionMode',
+              'allowTeamCustomization',
+              'minBatsmen',
+              'minBowlers',
+              'minAllRounders',
+              'minWicketkeepers',
+              'maxOverseas',
+              'updatedAt'
+            ])
+          ) ||
+          // Ownership transfer sync
+          (
+            incoming().ownerId != existing().ownerId
+            && incoming().ownerId in get(/databases/$(database)/documents/leagues/$(leagueId)).data.memberIds
+            && incoming().diff(existing()).affectedKeys().hasOnly(['ownerId', 'updatedAt'])
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // Exact-key invite code lookup (zero collection scraping)
+    match /league_invite_codes/{inviteCode} {
+      allow get: if isSignedIn() && isValidInviteCode(inviteCode);
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isValidLeagueInviteCode(incoming(), inviteCode)
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/leagues/$(incoming().leagueId));
+
+      allow update: if isSignedIn()
+        && isValidLeagueInviteCode(incoming(), inviteCode)
+        && existing().ownerId == request.auth.uid
+        && incoming().inviteCode == existing().inviteCode
+        && incoming().leagueId == existing().leagueId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            incoming().ownerId == existing().ownerId
+            && incoming().diff(existing()).affectedKeys().hasOnly(['leagueName', 'visibility', 'active', 'expiresAt', 'updatedAt'])
+          ) ||
+          (
+            incoming().ownerId != existing().ownerId
+            && incoming().diff(existing()).affectedKeys().hasOnly(['ownerId', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && isValidInviteCode(inviteCode)
+        && existing().ownerId == request.auth.uid;
+    }
+
+    // Deterministic membership doc: {leagueId}__{uid}
+    match /league_members/{memberId} {
+      allow get: if isSignedIn()
+        && isValidId(memberId)
+        && (
+          resource.data.userId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/leagues/$(resource.data.leagueId)).data.memberIds
+        );
+
+      allow list: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || resource.data.leagueOwnerId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isValidId(memberId)
+        && isValidLeagueMember(incoming(), memberId)
+        && incoming().joinedAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          // Case A: League Creator creating initial OWNER record
+          (
+            incoming().userId == request.auth.uid
+            && incoming().role == 'OWNER'
+            && incoming().leagueOwnerId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.ownerId == request.auth.uid
+          ) ||
+          // Case B: User joining a league via Public directory, valid Invite Code, or Accepted Invitation
+          (
+            incoming().userId == request.auth.uid
+            && incoming().role == 'MEMBER'
+            && get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.status in ['CREATED', 'OPEN', 'READY']
+            && get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.participantCount < get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.maxParticipants
+            && request.auth.uid in getAfter(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.memberIds
+            && (
+              get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.visibility == 'PUBLIC' ||
+              (
+                'joinedViaCode' in incoming()
+                && incoming().joinedViaCode is string
+                && isValidInviteCode(incoming().joinedViaCode)
+                && exists(/databases/$(database)/documents/league_invite_codes/$(incoming().joinedViaCode))
+                && get(/databases/$(database)/documents/league_invite_codes/$(incoming().joinedViaCode)).data.leagueId == incoming().leagueId
+                && get(/databases/$(database)/documents/league_invite_codes/$(incoming().joinedViaCode)).data.active == true
+              ) ||
+              (
+                'invitationId' in incoming()
+                && incoming().invitationId is string
+                && isValidId(incoming().invitationId)
+                && exists(/databases/$(database)/documents/league_invitations/$(incoming().invitationId))
+                && get(/databases/$(database)/documents/league_invitations/$(incoming().invitationId)).data.leagueId == incoming().leagueId
+                && get(/databases/$(database)/documents/league_invitations/$(incoming().invitationId)).data.recipientId == request.auth.uid
+                && getAfter(/databases/$(database)/documents/league_invitations/$(incoming().invitationId)).data.status == 'ACCEPTED'
+              )
+            )
+          ) ||
+          // Case C: League Owner approving a pending JOIN_REQUEST
+          (
+            incoming().role == 'MEMBER'
+            && get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.ownerId == request.auth.uid
+            && get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.status in ['CREATED', 'OPEN', 'READY']
+            && 'invitationId' in incoming()
+            && incoming().invitationId is string
+            && isValidId(incoming().invitationId)
+            && exists(/databases/$(database)/documents/league_invitations/$(incoming().invitationId))
+            && get(/databases/$(database)/documents/league_invitations/$(incoming().invitationId)).data.leagueId == incoming().leagueId
+            && get(/databases/$(database)/documents/league_invitations/$(incoming().invitationId)).data.type == 'JOIN_REQUEST'
+            && get(/databases/$(database)/documents/league_invitations/$(incoming().invitationId)).data.senderId == incoming().userId
+            && getAfter(/databases/$(database)/documents/league_invitations/$(incoming().invitationId)).data.status == 'ACCEPTED'
+            && incoming().userId in getAfter(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.memberIds
+          )
+        );
+
+      allow update: if isSignedIn()
+        && isValidId(memberId)
+        && isValidLeagueMember(incoming(), memberId)
+        && incoming().leagueId == existing().leagueId
+        && incoming().userId == existing().userId
+        && incoming().uniquePlayerId == existing().uniquePlayerId
+        && incoming().teamId == existing().teamId
+        && incoming().joinedAt == existing().joinedAt
+        && incoming().updatedAt == request.time
+        && (
+          // Member toggles ready status or updates own display snapshot
+          (
+            existing().userId == request.auth.uid
+            && incoming().role == existing().role
+            && incoming().leagueOwnerId == existing().leagueOwnerId
+            && incoming().diff(existing()).affectedKeys().hasOnly(['isReady', 'username', 'photoUrl', 'updatedAt'])
+          ) ||
+          // Ownership transfer role updates
+          (
+            get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.ownerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'leagueOwnerId', 'isReady', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && isValidId(memberId)
+        && get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.status in ['CREATED', 'OPEN', 'FULL', 'READY']
+        && !(existing().userId in getAfter(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.memberIds)
+        && (
+          (existing().userId == request.auth.uid && existing().role != 'OWNER') ||
+          (get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.ownerId == request.auth.uid && existing().userId != request.auth.uid)
+        );
+    }
+
+    // Deterministic unique team per member per league: {leagueId}__{ownerId}
+    match /league_teams/{teamDocId} {
+      allow get: if isSignedIn()
+        && isValidId(teamDocId)
+        && (
+          resource.data.ownerId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/leagues/$(resource.data.leagueId)).data.memberIds
+        );
+
+      allow list: if isSignedIn()
+        && (resource.data.ownerId == request.auth.uid || resource.data.leagueOwnerId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isValidId(teamDocId)
+        && isValidLeagueTeam(incoming(), teamDocId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/league_members/$(teamDocId))
+        && (
+          incoming().ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.ownerId == request.auth.uid
+        );
+
+      allow update: if isSignedIn()
+        && isValidId(teamDocId)
+        && isValidLeagueTeam(incoming(), teamDocId)
+        && incoming().teamId == existing().teamId
+        && incoming().leagueId == existing().leagueId
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Member customizes own fictional franchise name/shortName/logo/color pre-auction when allowed
+          (
+            existing().ownerId == request.auth.uid
+            && get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.status in ['CREATED', 'OPEN', 'FULL', 'READY']
+            && get(/databases/$(database)/documents/league_settings/$(existing().leagueId)).data.allowTeamCustomization == true
+            && incoming().diff(existing()).affectedKeys().hasOnly(['teamName', 'shortName', 'logoUrl', 'primaryColor', 'updatedAt'])
+          ) ||
+          // Member updates composition snapshot / marks squad complete on own team
+          (
+            existing().ownerId == request.auth.uid
+            && incoming().leagueOwnerId == existing().leagueOwnerId
+            && incoming().totalPurse == existing().totalPurse
+            && incoming().remainingPurse == existing().remainingPurse
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'playersCount',
+              'batsmenCount',
+              'bowlersCount',
+              'allRoundersCount',
+              'wicketkeepersCount',
+              'overseasCount',
+              'isSquadComplete',
+              'squadStatus',
+              'updatedAt'
+            ])
+          ) ||
+          // League owner updates purse when editing pre-auction settings or updates leagueOwnerId on ownership transfer
+          (
+            get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.ownerId == request.auth.uid
+            && get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.status in ['CREATED', 'OPEN', 'FULL', 'READY']
+            && incoming().diff(existing()).affectedKeys().hasOnly(['totalPurse', 'remainingPurse', 'leagueOwnerId', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && isValidId(teamDocId)
+        && get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.status in ['CREATED', 'OPEN', 'FULL', 'READY']
+        && !existsAfter(/databases/$(database)/documents/league_members/$(teamDocId))
+        && (
+          existing().ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.ownerId == request.auth.uid
+        );
+    }
+
+    // Direct league invitations & private join requests
+    match /league_invitations/{invitationId} {
+      allow get: if isSignedIn()
+        && isValidId(invitationId)
+        && (
+          resource.data.senderId == request.auth.uid ||
+          resource.data.recipientId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid
+        );
+
+      allow list: if isSignedIn()
+        && (
+          resource.data.senderId == request.auth.uid ||
+          resource.data.recipientId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid
+        );
+
+      allow create: if isSignedIn()
+        && isValidId(invitationId)
+        && isValidLeagueInvitation(incoming())
+        && incoming().senderId == request.auth.uid
+        && incoming().status == 'PENDING'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/leagues/$(incoming().leagueId))
+        && get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.status in ['CREATED', 'OPEN', 'READY']
+        && (
+          (
+            incoming().type == 'DIRECT_INVITE'
+            && request.auth.uid in get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.memberIds
+            && !(incoming().recipientId in get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.memberIds)
+          ) ||
+          (
+            incoming().type == 'JOIN_REQUEST'
+            && !(request.auth.uid in get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.memberIds)
+            && incoming().recipientId == get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.ownerId
+          )
+        );
+
+      allow update: if isSignedIn()
+        && isValidId(invitationId)
+        && isValidLeagueInvitation(incoming())
+        && existing().status == 'PENDING'
+        && incoming().leagueId == existing().leagueId
+        && incoming().type == existing().type
+        && incoming().senderId == existing().senderId
+        && incoming().recipientId == existing().recipientId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && (
+          (existing().recipientId == request.auth.uid && incoming().status in ['ACCEPTED', 'REJECTED']) ||
+          ((existing().senderId == request.auth.uid || existing().leagueOwnerId == request.auth.uid) && incoming().status in ['REVOKED', 'EXPIRED'])
+        );
+
+      allow delete: if isSignedIn()
+        && isValidId(invitationId)
+        && (
+          resource.data.senderId == request.auth.uid ||
+          resource.data.recipientId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid
+        );
+    }
+
+    // Immutable League Activity Timeline
+    match /league_activity/{activityId} {
+      allow get: if isSignedIn()
+        && isValidId(activityId)
+        && (
+          resource.data.visibility == 'PUBLIC' ||
+          request.auth.uid in resource.data.memberIds
+        );
+
+      allow list: if isSignedIn()
+        && (
+          resource.data.actorId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid ||
+          request.auth.uid in resource.data.memberIds
+        );
+
+      allow create: if isSignedIn()
+        && isValidId(activityId)
+        && isValidLeagueActivity(incoming())
+        && incoming().actorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && (
+          request.auth.uid in getAfter(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.memberIds ||
+          request.auth.uid in get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.memberIds ||
+          get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.ownerId == request.auth.uid ||
+          (
+            incoming().actionType == 'JOIN_REQUESTED'
+            && existsAfter(/databases/$(database)/documents/league_invitations/$(incoming().leagueId + '__' + request.auth.uid))
+          )
+        );
+
+      allow update, delete: if false;
+    }
+
+    // System Counters
+    match /counters/{counterId} {
+      allow read, write: if false;
+    }
+
+    // Server-managed Admins (read own status only, zero client write/escalation)
+    match /admins/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list, create, update, delete: if false;
+    }
+
+    // --- Prompt 4: Player Database, Attributes, Categories, Squad Settings, Ownership, Playing XI & Stats ---
+
+    match /players/{playerId} {
+      allow get: if isSignedIn() && isValidId(playerId) && (resource.data.isActive == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.isActive == true || isBootstrapAdminEmail());
+      allow create: if isAdmin()
+        && isValidId(playerId)
+        && isValidCricketPlayer(incoming(), playerId)
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(playerId)
+        && isValidCricketPlayer(incoming(), playerId)
+        && incoming().playerId == existing().playerId
+        && incoming().playerCode == existing().playerCode
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(playerId);
+    }
+
+    match /player_attributes/{playerId} {
+      allow get: if isSignedIn() && isValidId(playerId) && (resource.data.isActive == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.isActive == true || isBootstrapAdminEmail());
+      allow create: if isAdmin()
+        && isValidId(playerId)
+        && isValidPlayerAttributes(incoming(), playerId)
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(playerId)
+        && isValidPlayerAttributes(incoming(), playerId)
+        && incoming().playerId == existing().playerId
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(playerId);
+    }
+
+    match /player_categories/{categoryId} {
+      allow get: if isSignedIn() && isValidId(categoryId) && (resource.data.isActive == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.isActive == true || isBootstrapAdminEmail());
+      allow create: if isAdmin()
+        && isValidId(categoryId)
+        && isValidPlayerCategory(incoming(), categoryId)
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(categoryId)
+        && isValidPlayerCategory(incoming(), categoryId)
+        && incoming().categoryId == existing().categoryId
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(categoryId);
+    }
+
+    match /player_statistics/{playerId} {
+      allow get: if isSignedIn() && isValidId(playerId) && (resource.data.isActive == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.isActive == true || isBootstrapAdminEmail());
+      allow create: if isAdmin()
+        && isValidId(playerId)
+        && isValidPlayerStatistics(incoming(), playerId)
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(playerId)
+        && isValidPlayerStatistics(incoming(), playerId)
+        && incoming().playerId == existing().playerId
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(playerId);
+    }
+
+    match /squad_settings/{leagueId} {
+      allow get: if isSignedIn()
+        && isValidId(leagueId)
+        && (
+          resource.data.ownerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/leagues/$(leagueId)).data.memberIds
+        );
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(leagueId)
+        && isValidSquadSettings(incoming(), leagueId)
+        && incoming().ownerId == request.auth.uid
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/leagues/$(leagueId))
+        && get(/databases/$(database)/documents/leagues/$(leagueId)).data.ownerId == request.auth.uid;
+      allow update: if isSignedIn()
+        && isValidId(leagueId)
+        && isValidSquadSettings(incoming(), leagueId)
+        && existing().ownerId == request.auth.uid
+        && incoming().leagueId == existing().leagueId
+        && incoming().ownerId == existing().ownerId
+        && incoming().updatedAt == request.time
+        && get(/databases/$(database)/documents/leagues/$(leagueId)).data.status in ['CREATED', 'OPEN', 'FULL', 'READY']
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'minSquadSize',
+          'maxSquadSize',
+          'maxOverseas',
+          'minWicketkeepers',
+          'minBatsmen',
+          'minBowlers',
+          'minAllRounders',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // Deterministic league-scoped player ownership: {leagueId}__{playerId}
+    match /team_players/{ownershipId} {
+      allow get: if isSignedIn()
+        && isValidId(ownershipId)
+        && (
+          resource.data.ownerId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/leagues/$(resource.data.leagueId)).data.memberIds
+        );
+      allow list: if isSignedIn()
+        && (resource.data.ownerId == request.auth.uid || resource.data.leagueOwnerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(ownershipId)
+        && isValidTeamPlayerOwnership(incoming(), ownershipId)
+        && incoming().purchaseDate == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/leagues/$(incoming().leagueId))
+        && exists(/databases/$(database)/documents/league_teams/$(incoming().leagueId + '__' + incoming().ownerId))
+        && (
+          isAdmin() ||
+          incoming().ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.ownerId == request.auth.uid
+        );
+      allow update: if isSignedIn()
+        && isValidId(ownershipId)
+        && isValidTeamPlayerOwnership(incoming(), ownershipId)
+        && incoming().ownershipId == existing().ownershipId
+        && incoming().leagueId == existing().leagueId
+        && incoming().playerId == existing().playerId
+        && incoming().purchaseDate == existing().purchaseDate
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          existing().ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/leagues/$(existing().leagueId)).data.ownerId == request.auth.uid
+        )
+        && incoming().diff(existing()).affectedKeys().hasOnly(['ownershipStatus', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Deterministic Playing XI per team per league: {leagueId}__{ownerId}
+    match /playing_xi/{teamDocId} {
+      allow get: if isSignedIn()
+        && isValidId(teamDocId)
+        && (
+          resource.data.ownerId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/leagues/$(resource.data.leagueId)).data.memberIds
+        );
+      allow list: if isSignedIn()
+        && (resource.data.ownerId == request.auth.uid || resource.data.leagueOwnerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(teamDocId)
+        && isValidPlayingXi(incoming(), teamDocId)
+        && incoming().ownerId == request.auth.uid
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/league_teams/$(teamDocId));
+      allow update: if isSignedIn()
+        && isValidId(teamDocId)
+        && isValidPlayingXi(incoming(), teamDocId)
+        && existing().ownerId == request.auth.uid
+        && incoming().teamDocId == existing().teamDocId
+        && incoming().leagueId == existing().leagueId
+        && incoming().teamId == existing().teamId
+        && incoming().ownerId == existing().ownerId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'captainPlayerId',
+          'viceCaptainPlayerId',
+          'wicketkeeperPlayerId',
+          'playingXiIds',
+          'bowlingOrderIds',
+          'substituteIds',
+          'isValidForMatch',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // --- Prompt 5: Real-Time Multiplayer Auctions, Lots, Bids, Events, Results & Purses ---
+
+    match /auctions/{leagueId} {
+      allow get: if isSignedIn()
+        && isValidId(leagueId)
+        && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(leagueId)
+        && isValidAuction(incoming(), leagueId)
+        && incoming().ownerId == request.auth.uid
+        && incoming().state in ['CREATED', 'WAITING']
+        && incoming().settingsLocked == false
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/leagues/$(leagueId))
+        && get(/databases/$(database)/documents/leagues/$(leagueId)).data.ownerId == request.auth.uid;
+      allow update: if isSignedIn()
+        && isValidId(leagueId)
+        && isValidAuction(incoming(), leagueId)
+        && (existing().ownerId == request.auth.uid || isAdmin())
+        && incoming().auctionId == existing().auctionId
+        && incoming().leagueId == existing().leagueId
+        && incoming().ownerId == existing().ownerId
+        && incoming().updatedAt == request.time
+        && !(existing().state in ['COMPLETED', 'CANCELLED'])
+        && (
+          existing().settingsLocked == false
+          || (
+            incoming().timerSeconds == existing().timerSeconds
+            && incoming().tier1Increment == existing().tier1Increment
+            && incoming().tier2Increment == existing().tier2Increment
+            && incoming().tier3Increment == existing().tier3Increment
+            && incoming().playerOrderMode == existing().playerOrderMode
+            && incoming().enableSecondRound == existing().enableSecondRound
+            && incoming().allowSkipPlayer == existing().allowSkipPlayer
+            && incoming().maxTimerExtensions == existing().maxTimerExtensions
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /auction_participants/{participantId} {
+      allow get: if isSignedIn()
+        && isValidId(participantId)
+        && (
+          resource.data.userId == request.auth.uid ||
+          resource.data.leagueOwnerId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/leagues/$(resource.data.leagueId)).data.memberIds
+        );
+      allow list: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || resource.data.leagueOwnerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(participantId)
+        && isValidAuctionParticipant(incoming(), participantId)
+        && incoming().userId == request.auth.uid
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/league_members/$(incoming().leagueId + '__' + request.auth.uid));
+      allow update: if isSignedIn()
+        && isValidId(participantId)
+        && isValidAuctionParticipant(incoming(), participantId)
+        && existing().userId == request.auth.uid
+        && incoming().participantId == existing().participantId
+        && incoming().leagueId == existing().leagueId
+        && incoming().userId == existing().userId
+        && incoming().teamId == existing().teamId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['connectionStatus', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /auction_lots/{lotId} {
+      allow get: if isSignedIn()
+        && isValidId(lotId)
+        && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(lotId)
+        && isValidAuctionLot(incoming(), lotId)
+        && (incoming().ownerId == request.auth.uid || isAdmin())
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/leagues/$(incoming().leagueId))
+        && get(/databases/$(database)/documents/leagues/$(incoming().leagueId)).data.ownerId == incoming().ownerId;
+      allow update: if isSignedIn()
+        && isValidId(lotId)
+        && isValidAuctionLot(incoming(), lotId)
+        && (existing().ownerId == request.auth.uid || isAdmin())
+        && incoming().lotId == existing().lotId
+        && incoming().auctionId == existing().auctionId
+        && incoming().leagueId == existing().leagueId
+        && incoming().playerId == existing().playerId
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /auction_bids/{bidId} {
+      allow get: if isSignedIn()
+        && isValidId(bidId)
+        && (request.auth.uid in resource.data.memberIds || resource.data.bidderUserId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (request.auth.uid in resource.data.memberIds || resource.data.bidderUserId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(bidId)
+        && isValidAuctionBid(incoming(), bidId)
+        && incoming().bidderUserId == request.auth.uid
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/league_members/$(incoming().leagueId + '__' + request.auth.uid));
+      allow update, delete: if false;
+    }
+
+    match /auction_events/{eventId} {
+      allow get: if isSignedIn()
+        && isValidId(eventId)
+        && (request.auth.uid in resource.data.memberIds || isAdmin());
+      allow list: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+      allow create: if isSignedIn()
+        && isValidId(eventId)
+        && isValidAuctionEvent(incoming(), eventId)
+        && (incoming().actorUserId == request.auth.uid || isAdmin())
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/league_members/$(incoming().leagueId + '__' + request.auth.uid));
+      allow update, delete: if false;
+    }
+
+    match /auction_results/{resultId} {
+      allow get: if isSignedIn()
+        && isValidId(resultId)
+        && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(resultId)
+        && isValidAuctionResult(incoming(), resultId)
+        && (incoming().ownerId == request.auth.uid || isAdmin())
+        && incoming().finalizedAt == request.time
+        && exists(/databases/$(database)/documents/leagues/$(incoming().leagueId));
+      allow update: if isSignedIn()
+        && isValidId(resultId)
+        && isValidAuctionResult(incoming(), resultId)
+        && (existing().ownerId == request.auth.uid || isAdmin())
+        && existing().status == 'UNSOLD'
+        && incoming().resultId == existing().resultId
+        && incoming().leagueId == existing().leagueId
+        && incoming().playerId == existing().playerId
+        && incoming().finalizedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /team_purses/{purseId} {
+      allow get: if isSignedIn()
+        && isValidId(purseId)
+        && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid || resource.data.leagueOwnerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (request.auth.uid in resource.data.memberIds || resource.data.ownerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(purseId)
+        && isValidTeamPurse(incoming(), purseId)
+        && (incoming().ownerId == request.auth.uid || incoming().leagueOwnerId == request.auth.uid || isAdmin())
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/league_teams/$(purseId));
+      allow update: if isSignedIn()
+        && isValidId(purseId)
+        && isValidTeamPurse(incoming(), purseId)
+        && (existing().leagueOwnerId == request.auth.uid || existing().ownerId == request.auth.uid || isAdmin())
+        && incoming().purseId == existing().purseId
+        && incoming().leagueId == existing().leagueId
+        && incoming().teamId == existing().teamId
+        && incoming().ownerId == existing().ownerId
+        && incoming().initialPurse == existing().initialPurse
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // Boot Connection Probe
+    match /test/{docId} {
+      allow get: if isSignedIn() && docId == 'connection';
+      allow list, write: if false;
+    }
+  }
+}
